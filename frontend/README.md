@@ -2,7 +2,18 @@
 
 MVP dashboard — not a chat UI.
 
-## Setup (suggested: Vite + React + TypeScript)
+## Setup
+
+Phase 0 uses a static fixture dashboard so B can move without waiting on A's API.
+
+```bash
+cd frontend
+python -m http.server 5173
+```
+
+Then open `http://localhost:5173`.
+
+## Later setup (suggested: Vite + React + TypeScript)
 
 ```bash
 cd frontend
