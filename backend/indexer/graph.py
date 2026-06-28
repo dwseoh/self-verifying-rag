@@ -73,7 +73,13 @@ def graph_excerpt(graph: dict, paths: list[str], limit: int = 30) -> str:
 
 
 def detect_boundary_hint(diff_text: str) -> bool:
-    """Fast heuristic: payments import in web layer (for mock/demo without API)."""
+    """True when web layer directly imports packages.payments (demo violation)."""
     in_web = "apps/web" in diff_text or "apps\\web" in diff_text
-    hits_payments = bool(re.search(r"payments", diff_text, re.I))
-    return in_web and hits_payments
+    if not in_web:
+        return False
+    return bool(
+        re.search(
+            r"(from\s+packages\.payments|import\s+packages\.payments)",
+            diff_text,
+        )
+    )

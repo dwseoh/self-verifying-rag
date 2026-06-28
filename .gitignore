@@ -22,6 +22,9 @@ data/store/*.json
 data/store/*.jsonl
 !data/store/.gitkeep
 
+# Nested git repo for branch-verify demos (created by scripts/init-demo-repo-git.sh)
+data/demo_repo/.git/
+
 # IDE
 .idea/
 .vscode/

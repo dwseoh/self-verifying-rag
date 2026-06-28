@@ -1,6 +1,5 @@
 import json
 import time
-import uuid
 from pathlib import Path
 
 from openai import AsyncOpenAI
@@ -53,11 +52,14 @@ async def complete_json(
     user: str,
     schema_name: str = "verifier_findings",
     schema: dict | None = None,
+    use_mock_findings: bool = True,
 ) -> tuple[dict, int]:
     """Return (parsed_json, latency_ms). Uses mock when TRUSTLOOP_MOCK or no API key."""
     schema = schema or FINDINGS_SCHEMA
 
     if settings.use_mock:
+        if not use_mock_findings:
+            return {"findings": []}, 45
         return _load_mock(agent_name), 50
 
     client = AsyncOpenAI(

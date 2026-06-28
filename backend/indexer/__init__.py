@@ -7,10 +7,12 @@ from backend.indexer.graph import (
     diff_summary_for_paths,
     graph_excerpt,
 )
+from backend.indexer.graph_cache import build_graph_cached
 
 __all__ = [
     "affected_paths",
     "build_graph",
+    "build_graph_cached",
     "detect_boundary_hint",
     "diff_summary_for_paths",
     "graph_excerpt",
