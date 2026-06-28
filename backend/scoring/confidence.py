@@ -19,7 +19,16 @@ def score_findings(findings: list[Finding], verification_incomplete: bool) -> li
     return scored
 
 
-def overall_confidence(findings: list[Finding], verification_incomplete: bool) -> int:
+def overall_confidence(
+    findings: list[Finding],
+    verification_incomplete: bool,
+    *,
+    corpus_weak: bool = False,
+) -> int:
     if not findings:
-        return 100 if not verification_incomplete else 85
+        if verification_incomplete:
+            return 85
+        if corpus_weak:
+            return 55
+        return 100
     return max(0, min(100, int(sum(f.confidence for f in findings) / len(findings))))

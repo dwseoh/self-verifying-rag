@@ -34,3 +34,4 @@ data/clones/
 .vscode/
 *.swp
 .DS_Store
+.cursor

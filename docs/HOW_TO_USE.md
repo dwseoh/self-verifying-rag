@@ -126,6 +126,15 @@ uvicorn backend.app:app --reload --port 8000
 
 Corpus stays `data/engineering_corpus/` (committed demo docs only). Local clones are **code targets**, not ingested docs.
 
+For **repo-specific rules** without committing them, point `.env` at a local folder:
+
+```bash
+# .env — local only, never pushed
+TRUSTLOOP_CORPUS_PATH=/Users/you/docs/my-project-rules
+```
+
+Generic C/C++ conventions (`C_STYLE_*`) ship in the committed corpus; project-specific ADRs stay local.
+
 ### 4. Live Cerebras (you have API key)
 
 In `.env`:

@@ -6,7 +6,7 @@ from backend.config import settings
 from backend.indexer.graph import build_graph, detect_boundary_hint, diff_summary_for_paths
 from backend.models import TriggerType, VerifyRequest
 from backend.pipeline.orchestrator import run_verification
-from backend.retrieval.retriever import load_corpus, retrieve
+from backend.retrieval.retriever import corpus_weak, load_corpus, retrieve
 
 
 @pytest.fixture
@@ -37,6 +37,26 @@ def test_corpus_retrieve():
     hits = retrieve("payments web import boundary", chunks, top_k=3)
     ids = {c.citation_id for c in hits}
     assert "ARCH_ADR_004" in ids or any("ADR" in i for i in ids)
+
+
+def test_corpus_retrieve_c_prefers_c_conventions():
+    chunks = load_corpus()
+    hits = retrieve(
+        "obc/tools/cli/cli.c",
+        chunks,
+        top_k=3,
+        changed_paths=["obc/tools/cli/cli.c"],
+    )
+    ids = {c.citation_id for c in hits}
+    assert any(i.startswith("C_STYLE") for i in ids)
+    assert "RUNBOOK_CHECKOUT_002" not in ids
+
+
+def test_corpus_weak_when_no_match():
+    chunks = load_corpus()
+    hits = retrieve("xyzzy_nonexistent_module", chunks, top_k=5)
+    assert hits == []
+    assert corpus_weak(hits)
 
 
 @pytest.mark.asyncio

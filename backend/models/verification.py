@@ -57,6 +57,7 @@ class RunMetadata(BaseModel):
     files_checked: int = 0
     citations_consulted: int = 0
     agents_run: int = 0
+    corpus_max_score: float = 0.0
 
 
 class CorpusChunk(BaseModel):
@@ -88,6 +89,7 @@ class VerificationRun(BaseModel):
     risk_level: Literal["low", "medium", "high"] = "low"
     overall_confidence: int = Field(default=100, ge=0, le=100)
     verification_incomplete: bool = False
+    warnings: list[str] = Field(default_factory=list)
     agent_timeline: list[AgentTimelineEntry] = Field(default_factory=list)
     retrieved_chunks: list[CorpusChunk] = Field(default_factory=list)
     latency: LatencyBreakdown = Field(default_factory=LatencyBreakdown)
