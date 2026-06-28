@@ -1,70 +1,70 @@
-# Backend MVP — handoff for Person B
+# Backend — TrustLoop engine
 
 ## Run API
 
 ```bash
-cd ..   # repo root
-python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-cp .env.example .env    # TRUSTLOOP_MOCK=1 works without Cerebras key
+cp .env.example .env
+# Live LLM: CEREBRAS_API_KEY=... and TRUSTLOOP_MOCK=0
 
 uvicorn backend.app:app --reload --port 8000
 ```
 
-- Swagger UI: http://localhost:8000/docs
-- Health: http://localhost:8000/health
-- Fixture samples: http://localhost:8000/api/schema/fixture
-
-## Primary endpoint
-
-```http
-POST /api/verify
-Content-Type: application/json
-
-{
-  "repo_path": "data/demo_repo",
-  "changed_paths": ["apps/web/checkout.py"],
-  "trigger": "manual"
-}
-```
-
-Response type: **`VerificationRun`** — see `backend/models/verification.py` and `fixtures/verification_run_violation.json`.
-
-### Dev modes
+## LLM (Cerebras Gemma)
 
 | Env | Behavior |
 |-----|----------|
-| `TRUSTLOOP_MOCK=1` | Full pipeline; agents use `fixtures/agent_mocks/` (no API key) |
-| `CEREBRAS_API_KEY=...` | Live Gemma calls |
-| `TRUSTLOOP_FIXTURE_API=1` | `/api/verify` returns static fixtures only |
-| `?fixture=clean\|violation` | One-off static fixture |
+| `CEREBRAS_API_KEY` set + `TRUSTLOOP_MOCK=0` | **Live** — 5 parallel `gemma-4-31b` calls per verify |
+| No key or `TRUSTLOOP_MOCK=1` | **Mock** — `fixtures/agent_mocks/*.json` |
 
-## Demo violation
+Check connectivity:
 
 ```bash
-./scripts/seed-violation.sh    # add bad import
-./scripts/verify.sh            # POST verify
-./scripts/reset-checkout.sh    # restore clean
+curl http://localhost:8000/health/llm
+pytest tests/test_llm_live.py   # needs CEREBRAS_API_KEY
 ```
 
-## What the pipeline does
+All agents use `backend/llm/cerebras_client.py` → structured JSON (`json_schema`, `strict: true`).  
+See `docs/CEREBRAS_GEMMA.md`.
 
-```txt
-POST /api/verify
-  → indexer: import graph + diff + subgraph
-  → retriever: top 5 corpus chunks (keyword)
-  → 3 parallel agents (asyncio.gather)
-  → composer + confidence
-  → VerificationRun JSON
+## Endpoints
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/api/verify` | Full pipeline (5 agents) |
+| POST | `/api/verify/preview` | Context only, no LLM |
+| GET | `/api/findings/latest` | Last run (UI polling) |
+| GET | `/health/llm` | Ping Cerebras |
+
+## Sprint 3 — triggers & MCP
+
+```bash
+# Manual
+./scripts/verify.sh
+
+# Branch diff
+./scripts/verify-branch.sh data/demo_repo main feature/bad-payments-import
+
+# Any repo
+./scripts/verify-repo.sh /path/to/repo src/foo.py
+
+# Save watcher (API must be running)
+pip install -e .
+python scripts/watch-save.py
+
+# MCP for Cursor (stdio)
+pip install -e ".[mcp]"
+./scripts/run-mcp.sh
 ```
 
-## Types for frontend (`src/types/verification.ts`)
+MCP tools: `verify_diff`, `get_findings`, `search_engineering_corpus`
 
-Mirror these from `VerificationRun`:
+## Agents (5 parallel)
 
-- `findings[]` — severity, confidence, title, explanation, citation_ids, evidence_snippets
-- `agent_timeline[]` — agent, status, latency_ms
-- `latency` — indexing_ms, retrieval_ms, parallel_verification_ms, total_ms
-- `overall_confidence`, `risk_level`, `verification_incomplete`
+1. `architecture_boundary`
+2. `convention`
+3. `doc_drift`
+4. `incident_pattern`
+5. `risk`
 
-See `docs/HOW_TO_USE.md` for graph, corpus, triggers, and testing on real repos.
+See `docs/HOW_TO_USE.md` for graph, corpus, and context assembly.

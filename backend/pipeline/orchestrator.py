@@ -2,7 +2,14 @@ import asyncio
 import time
 import uuid
 
-from backend.agents import base, run_architecture_boundary, run_incident_pattern, run_risk
+from backend.agents import (
+    base,
+    run_architecture_boundary,
+    run_convention,
+    run_doc_drift,
+    run_incident_pattern,
+    run_risk,
+)
 from backend.config import settings
 from backend.indexer import graph as graph_indexer
 from backend.indexer.graph_cache import build_graph_cached
@@ -18,6 +25,15 @@ from backend.models import (
 from backend.pipeline import composer
 from backend.retrieval.retriever import load_corpus, retrieve
 from backend.scoring import confidence as confidence_scoring
+
+# All micro-verifiers fan out in parallel (MVP: 3, Sprint 3: 5)
+AGENT_RUNNERS = [
+    run_architecture_boundary,
+    run_convention,
+    run_doc_drift,
+    run_incident_pattern,
+    run_risk,
+]
 
 
 async def build_context_preview(req: VerifyRequest) -> dict:
@@ -37,6 +53,8 @@ async def build_context_preview(req: VerifyRequest) -> dict:
         "graph_excerpt": excerpt,
         "diff_summary_preview": scope.diff_summary[:4000],
         "retrieved_chunks": [c.model_dump() for c in chunks],
+        "agents_planned": len(AGENT_RUNNERS),
+        "llm_mode": "mock" if settings.use_mock else "cerebras",
         "graph_stats": {
             "nodes": len(g.get("nodes", [])),
             "edges": len(g.get("edges", [])),
@@ -74,9 +92,7 @@ async def run_verification(req: VerifyRequest) -> VerificationRun:
 
     t_par = time.perf_counter()
     raw_results = await asyncio.gather(
-        run_architecture_boundary(ctx),
-        run_incident_pattern(ctx),
-        run_risk(ctx),
+        *[runner(ctx) for runner in AGENT_RUNNERS],
         return_exceptions=True,
     )
     parallel_ms = int((time.perf_counter() - t_par) * 1000)

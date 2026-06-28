@@ -30,3 +30,5 @@ data/demo_repo/.git/
 .vscode/
 *.swp
 .DS_Store
+
+data/orbital

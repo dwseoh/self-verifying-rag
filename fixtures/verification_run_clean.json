@@ -11,6 +11,8 @@
   "verification_incomplete": false,
   "agent_timeline": [
     {"agent": "architecture_boundary", "status": "ok", "latency_ms": 48},
+    {"agent": "convention", "status": "ok", "latency_ms": 46},
+    {"agent": "doc_drift", "status": "ok", "latency_ms": 44},
     {"agent": "incident_pattern", "status": "ok", "latency_ms": 45},
     {"agent": "risk", "status": "ok", "latency_ms": 42}
   ],
@@ -33,6 +35,6 @@
   "metadata": {
     "files_checked": 2,
     "citations_consulted": 3,
-    "agents_run": 3
+    "agents_run": 5
   }
 }

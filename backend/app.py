@@ -5,9 +5,11 @@ from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.config import ROOT, settings
+from backend.llm.cerebras_client import check_llm_connection
 from backend.models import VerificationRun, VerifyRequest
 from backend.pipeline.orchestrator import build_context_preview, run_verification
 from backend.storage.json_store import JsonStore
+from backend.storage.run_cache import get_last_run, set_last_run
 
 app = FastAPI(
     title="TrustLoop",
@@ -36,10 +38,17 @@ async def health() -> dict:
     return {
         "status": "ok",
         "mock_mode": settings.use_mock,
+        "llm_mode": "mock" if settings.use_mock else "cerebras",
         "fixture_api": settings.trustloop_fixture_api,
         "model": settings.cerebras_model,
         "repo_path": str(settings.trustloop_repo_path),
     }
+
+
+@app.get("/health/llm")
+async def health_llm() -> dict:
+    """Live Cerebras connectivity check (uses API key)."""
+    return await check_llm_connection()
 
 
 @app.get("/api/schema/fixture")
@@ -92,5 +101,15 @@ async def verify(
         return run
 
     run = await run_verification(req)
+    set_last_run(run)
     store.append_jsonl("runs.jsonl", {"id": run.id, "trigger": run.trigger.value})
     return run
+
+
+@app.get("/api/findings/latest")
+async def latest_findings() -> dict:
+    """Most recent VerificationRun (for UI polling / MCP companion)."""
+    run = get_last_run()
+    if not run:
+        return {"findings": [], "message": "No verification run yet"}
+    return run.model_dump()

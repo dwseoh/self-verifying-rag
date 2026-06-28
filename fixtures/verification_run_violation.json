@@ -11,39 +11,12 @@
       "severity": "high",
       "confidence": 75,
       "title": "Direct web to payments import",
-      "explanation": "checkout.py imports packages.payments.client, violating ARCH_ADR_004. Web must use apps.api.payments_gateway.",
+      "explanation": "checkout.py imports packages.payments.client, violating ARCH_ADR_004.",
       "citation_ids": ["ARCH_ADR_004", "INCIDENT_PM_2024_03"],
-      "evidence_snippets": [
-        {
-          "citation_id": "ARCH_ADR_004",
-          "text": "The web application (apps/web) must not import from the packages/payments package directly."
-        },
-        {
-          "citation_id": "INCIDENT_PM_2024_03",
-          "text": "Direct apps/web to packages/payments imports caused duplicate charges under load."
-        }
-      ],
+      "evidence_snippets": [],
       "related_paths": ["apps/web/checkout.py"],
-      "recommended_fix": "Use apps.api.payments_gateway.create_payment_intent instead of importing payments.client.",
+      "recommended_fix": "Use apps.api.payments_gateway.create_payment_intent.",
       "detected_by": ["architecture_boundary", "incident_pattern"],
-      "status": "open"
-    },
-    {
-      "id": "finding_risk_1",
-      "severity": "medium",
-      "confidence": 88,
-      "title": "Payment data path change",
-      "explanation": "Modification touches customer payment flow; medium compliance risk until reviewed.",
-      "citation_ids": ["ARCH_ADR_004"],
-      "evidence_snippets": [
-        {
-          "citation_id": "ARCH_ADR_004",
-          "text": "All payment operations from the web tier must go through the API gateway service."
-        }
-      ],
-      "related_paths": ["apps/web/checkout.py"],
-      "recommended_fix": "Ensure payment calls stay on approved gateway path.",
-      "detected_by": ["risk"],
       "status": "open"
     }
   ],
@@ -52,25 +25,12 @@
   "verification_incomplete": false,
   "agent_timeline": [
     {"agent": "architecture_boundary", "status": "ok", "latency_ms": 138},
+    {"agent": "convention", "status": "ok", "latency_ms": 125},
+    {"agent": "doc_drift", "status": "ok", "latency_ms": 119},
     {"agent": "incident_pattern", "status": "ok", "latency_ms": 121},
     {"agent": "risk", "status": "ok", "latency_ms": 119}
   ],
-  "retrieved_chunks": [
-    {
-      "citation_id": "ARCH_ADR_004",
-      "document_title": "Arch Adr 004 Service Boundaries",
-      "section_title": "Service Boundary Rules",
-      "text": "The web application must not import from the packages/payments package directly.",
-      "score": 0.92
-    },
-    {
-      "citation_id": "INCIDENT_PM_2024_03",
-      "document_title": "Incident Pm 2024 03 Payments Bypass",
-      "section_title": "Direct web-to-payments import outage",
-      "text": "Direct apps/web to packages/payments imports caused duplicate charges.",
-      "score": 0.88
-    }
-  ],
+  "retrieved_chunks": [],
   "latency": {
     "indexing_ms": 35,
     "retrieval_ms": 22,
@@ -81,6 +41,6 @@
   "metadata": {
     "files_checked": 3,
     "citations_consulted": 5,
-    "agents_run": 3
+    "agents_run": 5
   }
 }

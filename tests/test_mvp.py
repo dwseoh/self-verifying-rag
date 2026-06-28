@@ -50,7 +50,7 @@ async def test_run_verification_clean(repo_path, monkeypatch):
             trigger=TriggerType.MANUAL,
         )
     )
-    assert run.metadata.agents_run == 3
+    assert run.metadata.agents_run == 5
     assert not any(f.severity.value == "high" for f in run.findings)
 
 
@@ -88,7 +88,7 @@ async def test_api_verify_clean(monkeypatch):
         )
     assert res.status_code == 200
     body = res.json()
-    assert body["metadata"]["agents_run"] == 3
+    assert body["metadata"]["agents_run"] == 5
 
 
 @pytest.mark.asyncio
@@ -104,6 +104,8 @@ async def test_preview_endpoint():
     assert "graph_excerpt" in body
     assert "retrieved_chunks" in body
     assert body["changed_paths"] == ["apps/web/checkout.py"]
+    assert body["agents_planned"] == 5
+    assert body["llm_mode"] in {"mock", "cerebras"}
 
 
 def test_graph_cache_idempotent(repo_path):
