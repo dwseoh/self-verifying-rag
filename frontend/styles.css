@@ -2,16 +2,21 @@
   color-scheme: light;
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --bg: #f7f8fb;
+  --bg: #f4f6f9;
   --panel: #ffffff;
+  --sidebar: #111827;
+  --sidebar-soft: #1f2937;
+  --sidebar-text: #f8fafc;
+  --sidebar-muted: #9ca3af;
   --text: #172033;
   --muted: #667085;
-  --line: #d9dee8;
-  --blue: #2563eb;
+  --line: #dde3ec;
+  --blue: #0d6efd;
+  --blue-soft: #e7f1ff;
   --green: #157f3b;
-  --yellow: #a15c00;
-  --red: #bc1b2f;
-  --shadow: 0 18px 50px rgba(23, 32, 51, 0.08);
+  --yellow: #9a5b00;
+  --red: #b4232f;
+  --shadow: 0 14px 40px rgba(17, 24, 39, 0.07);
 }
 
 * {
@@ -37,10 +42,110 @@ button {
   padding: 0 18px;
 }
 
+button:hover {
+  background: #0b5ed7;
+}
+
+.dashboard {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.sidebar {
+  background: var(--sidebar);
+  color: var(--sidebar-text);
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding: 24px 18px;
+}
+
+.brand {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.brand-mark {
+  align-items: center;
+  background: var(--blue);
+  border-radius: 8px;
+  display: inline-flex;
+  font-size: 14px;
+  font-weight: 900;
+  height: 40px;
+  justify-content: center;
+  width: 40px;
+}
+
+.brand strong,
+.brand span {
+  display: block;
+}
+
+.brand strong {
+  font-size: 16px;
+}
+
+.brand span {
+  color: var(--sidebar-muted);
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+.nav-list {
+  display: grid;
+  gap: 6px;
+}
+
+.nav-list a {
+  border-radius: 8px;
+  color: var(--sidebar-muted);
+  font-weight: 700;
+  padding: 11px 12px;
+  text-decoration: none;
+}
+
+.nav-list a.active,
+.nav-list a:hover {
+  background: var(--sidebar-soft);
+  color: var(--sidebar-text);
+}
+
+.nav-list a.active {
+  box-shadow: inset 3px 0 0 var(--blue);
+}
+
+.sidebar-status {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  margin-top: auto;
+  padding: 14px;
+}
+
+.sidebar-status span,
+.sidebar-status strong {
+  display: block;
+}
+
+.sidebar-status span {
+  color: var(--sidebar-muted);
+  font-size: 12px;
+  font-weight: 800;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+
+.sidebar-status strong {
+  font-size: 15px;
+}
+
 .app-shell {
-  margin: 0 auto;
+  margin: 0;
   max-width: 1240px;
-  padding: 28px;
+  padding: 30px;
+  width: 100%;
 }
 
 .topbar {
@@ -96,7 +201,8 @@ h2 {
 }
 
 .summary-card {
-  padding: 16px;
+  border-top: 3px solid var(--blue);
+  padding: 17px;
 }
 
 .summary-card span {
@@ -108,6 +214,7 @@ h2 {
 }
 
 .summary-card strong {
+  color: #111827;
   display: block;
   font-size: 28px;
   line-height: 1;
@@ -149,8 +256,8 @@ h2 {
 }
 
 .pill {
-  background: #eef2ff;
-  color: #3447a3;
+  background: var(--blue-soft);
+  color: #084298;
 }
 
 .findings-list {
@@ -161,6 +268,7 @@ h2 {
 .finding {
   border: 1px solid var(--line);
   border-radius: 8px;
+  background: #ffffff;
   padding: 14px;
 }
 
@@ -207,13 +315,13 @@ h2 {
 }
 
 .meta-row span {
-  background: #f3f5f9;
+  background: #f5f7fb;
   border-radius: 6px;
   padding: 6px 8px;
 }
 
 .fix {
-  background: #f8fafc;
+  background: var(--blue-soft);
   border-left: 3px solid var(--blue);
   border-radius: 4px;
   color: var(--text);
@@ -249,7 +357,7 @@ h2 {
 }
 
 .bar {
-  background: #e8edf7;
+  background: #e6ebf2;
   border-radius: 999px;
   height: 9px;
   overflow: hidden;
@@ -270,6 +378,7 @@ h2 {
 .citation {
   border: 1px solid var(--line);
   border-radius: 8px;
+  background: #fbfcfe;
   padding: 12px;
 }
 
@@ -293,6 +402,14 @@ h2 {
 }
 
 @media (max-width: 860px) {
+  .dashboard {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    display: none;
+  }
+
   .app-shell {
     padding: 18px;
   }

@@ -7,69 +7,91 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <main class="app-shell">
-      <header class="topbar">
-        <div>
-          <p class="eyebrow">TrustLoop</p>
-          <h1>Code assurance dashboard</h1>
-        </div>
-        <button id="verifyButton" type="button">Verify</button>
-      </header>
-
-      <section class="summary-grid" aria-label="Verification summary">
-        <article class="summary-card">
-          <span>Risk</span>
-          <strong id="riskLevel">-</strong>
-        </article>
-        <article class="summary-card">
-          <span>Confidence</span>
-          <strong id="confidence">-</strong>
-        </article>
-        <article class="summary-card">
-          <span>Latency</span>
-          <strong id="latency">-</strong>
-        </article>
-        <article class="summary-card">
-          <span>Agents</span>
-          <strong id="agentsRun">-</strong>
-        </article>
-      </section>
-
-      <section class="workspace">
-        <section class="panel findings-panel" aria-labelledby="findingsTitle">
-          <div class="panel-header">
-            <div>
-              <p class="eyebrow">Findings</p>
-              <h2 id="findingsTitle">Open verification findings</h2>
-            </div>
-            <span id="runId" class="pill">fixture</span>
+    <div class="dashboard">
+      <aside class="sidebar" aria-label="TrustLoop navigation">
+        <div class="brand">
+          <span class="brand-mark">TL</span>
+          <div>
+            <strong>TrustLoop</strong>
+            <span>Assurance layer</span>
           </div>
-          <div id="findingsList" class="findings-list"></div>
+        </div>
+        <nav class="nav-list" aria-label="Dashboard sections">
+          <a class="active" href="#">Verify</a>
+          <a href="#">Findings</a>
+          <a href="#">Evidence</a>
+          <a href="#">Runs</a>
+        </nav>
+        <div class="sidebar-status">
+          <span>Phase 0</span>
+          <strong>Fixture mode</strong>
+        </div>
+      </aside>
+
+      <main class="app-shell">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Verification workspace</p>
+            <h1>Code assurance dashboard</h1>
+          </div>
+          <button id="verifyButton" type="button">Verify</button>
+        </header>
+
+        <section class="summary-grid" aria-label="Verification summary">
+          <article class="summary-card">
+            <span>Risk</span>
+            <strong id="riskLevel">-</strong>
+          </article>
+          <article class="summary-card">
+            <span>Confidence</span>
+            <strong id="confidence">-</strong>
+          </article>
+          <article class="summary-card">
+            <span>Latency</span>
+            <strong id="latency">-</strong>
+          </article>
+          <article class="summary-card">
+            <span>Agents</span>
+            <strong id="agentsRun">-</strong>
+          </article>
         </section>
 
-        <aside class="side-stack">
-          <section class="panel" aria-labelledby="timelineTitle">
+        <section class="workspace">
+          <section class="panel findings-panel" aria-labelledby="findingsTitle">
             <div class="panel-header">
               <div>
-                <p class="eyebrow">Parallel agents</p>
-                <h2 id="timelineTitle">Timeline</h2>
+                <p class="eyebrow">Findings</p>
+                <h2 id="findingsTitle">Open verification findings</h2>
               </div>
+              <span id="runId" class="pill">fixture</span>
             </div>
-            <div id="timeline" class="timeline"></div>
+            <div id="findingsList" class="findings-list"></div>
           </section>
 
-          <section class="panel" aria-labelledby="citationsTitle">
-            <div class="panel-header">
-              <div>
-                <p class="eyebrow">Evidence</p>
-                <h2 id="citationsTitle">Citations</h2>
+          <aside class="side-stack">
+            <section class="panel" aria-labelledby="timelineTitle">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Parallel agents</p>
+                  <h2 id="timelineTitle">Timeline</h2>
+                </div>
               </div>
-            </div>
-            <div id="citations" class="citations"></div>
-          </section>
-        </aside>
-      </section>
-    </main>
+              <div id="timeline" class="timeline"></div>
+            </section>
+
+            <section class="panel" aria-labelledby="citationsTitle">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Evidence</p>
+                  <h2 id="citationsTitle">Citations</h2>
+                </div>
+              </div>
+              <div id="citations" class="citations"></div>
+            </section>
+          </aside>
+        </section>
+      </main>
+    </div>
 
     <script src="./src/app.js"></script>
   </body>
