@@ -115,3 +115,22 @@ def test_graph_cache_idempotent(repo_path):
     g2 = build_graph_cached(repo_path)
     assert len(g1["edges"]) == len(g2["edges"])
     assert g2.get("cached_files", 0) >= 1
+
+
+def test_c_include_edges(repo_path):
+    graph = build_graph(repo_path)
+    assert any(n.endswith("gateway_stub.c") for n in graph["nodes"])
+    assert any(
+        e["from"].endswith("gateway_stub.c")
+        and e["to"] == "packages/payments/client.h"
+        and e["kind"] == "include_local"
+        for e in graph["edges"]
+    )
+
+
+def test_source_file_discovery_includes_c(repo_path):
+    from backend.indexer.source_files import iter_source_files
+
+    names = {p.name for p in iter_source_files(repo_path)}
+    assert "gateway_stub.c" in names
+    assert "checkout.py" in names

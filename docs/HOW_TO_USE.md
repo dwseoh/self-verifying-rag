@@ -8,21 +8,23 @@ On each verify, TrustLoop **reads what code changed**, **pulls relevant docs**, 
 
 ## The graph (code index) — not embeddings
 
-The **graph** is a list of **import relationships** between files:
+The **graph** is dependency edges between source files:
 
 ```txt
-apps/web/checkout.py  →  apps.api.payments_gateway   ✅ allowed path
-apps/web/checkout.py  →  packages.payments.client    🚫 boundary violation
+apps/web/checkout.py       →  apps.api.payments_gateway   ✅ allowed path
+apps/web/checkout.py       →  packages.payments.client    🚫 boundary violation
+apps/web/checkout_native.c →  packages/payments/client.h  (include edge)
 ```
 
-**How it’s built:** parse each `.py` file with Python `ast`, record `import` lines.  
+**How it’s built:** parse **Python** (`import`) and **C/C++** (`#include`) in source files under the repo.  
+Supported: `.py`, `.c`, `.cc`, `.cpp`, `.cxx`, `.h`, `.hpp`, `.hxx`.  
 **No vectors. No database.** Cached in `data/store/repo_graph_<hash>.json`.
 
 ### Incremental indexing (just added)
 
 | First run | Later runs |
 |-----------|------------|
-| Parse all `.py` files | Only re-parse files whose **mtime changed** |
+| Parse all source files | Only re-parse files whose **mtime changed** |
 | Write cache file | Reuse cached edges for unchanged files |
 
 For a **big repo**, you still cache the full graph once; updates are incremental per file.  
@@ -112,23 +114,17 @@ uvicorn backend.app:app --reload --port 8000
 ./scripts/verify-branch.sh data/demo_repo main feature/bad-payments-import
 ```
 
-### 3. Your actual repo
+### 3. Your actual repo (local clone)
 
 ```bash
-# Specific files
-./scripts/verify-repo.sh /path/to/your/repo src/foo.py src/bar.py
+# Put clones under data/ — gitignored, never pushed
+# e.g. data/clones/my-project/
 
-# PR-style branch compare (repo must be git)
-./scripts/verify-branch.sh /path/to/your/repo main your-branch
+./scripts/verify-repo.sh data/clones/my-project src/foo.c src/bar.cpp
+./scripts/verify-branch.sh data/clones/my-project main feature-branch
 ```
 
-Point corpus at more docs via `.env`:
-
-```bash
-TRUSTLOOP_CORPUS_PATH=data/engineering_corpus
-```
-
-(To use repo-local docs later: copy conventions into `engineering_corpus/` or set `TRUSTLOOP_CORPUS_PATH` to a folder you maintain.)
+Corpus stays `data/engineering_corpus/` (committed demo docs only). Local clones are **code targets**, not ingested docs.
 
 ### 4. Live Cerebras (you have API key)
 

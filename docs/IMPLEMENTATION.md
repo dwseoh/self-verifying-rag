@@ -49,7 +49,9 @@ GITHUB (source of truth — commit these)
 
 NOT IN GITHUB (runtime / secrets — gitignored)
 ├── .env                         # CEREBRAS_API_KEY
-├── data/store/*.json            # review state, run log (MVP)
+├── data/store/*.json            # graph cache, run log
+├── data/orbital/                # local clones — never commit
+├── data/clones/                 # local clones — never commit
 └── .venv/, node_modules/
 ```
 

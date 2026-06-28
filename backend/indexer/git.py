@@ -5,6 +5,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+from backend.indexer.source_files import is_source_file
 
 class GitError(RuntimeError):
     pass
@@ -33,10 +34,10 @@ def is_git_repo(repo: Path) -> bool:
 
 
 def changed_files(repo: Path, base_ref: str, head_ref: str) -> list[str]:
-    """Files changed between base and head (Python only for MVP verify scope)."""
+    """Source files changed between base and head (Python + C/C++)."""
     out = _run_git(repo, "diff", "--name-only", f"{base_ref}...{head_ref}")
     files = [line.strip() for line in out.splitlines() if line.strip()]
-    return [f for f in files if f.endswith(".py")]
+    return [f for f in files if is_source_file(Path(f))]
 
 
 def diff_text(repo: Path, base_ref: str, head_ref: str, paths: list[str] | None = None) -> str:

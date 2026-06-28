@@ -48,8 +48,8 @@ def resolve_scope(repo: Path, req: VerifyRequest) -> VerifyScope:
                     paths = [fallback]
                 else:
                     warning = (
-                        f"No changed .py files between {req.base_ref}...{req.head_ref}. "
-                        "Pass changed_paths explicitly, compare different refs, or extend indexer for .c/.cpp."
+                        f"No changed source files between {req.base_ref}...{req.head_ref}. "
+                        "Pass changed_paths explicitly or compare different refs."
                     )
                     return VerifyScope(
                         changed_paths=[],

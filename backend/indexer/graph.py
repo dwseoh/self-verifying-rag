@@ -1,36 +1,26 @@
-"""Deterministic import graph for demo_repo. MVP: Python imports only."""
+"""Deterministic dependency graph for Python and C/C++ sources."""
 
 from __future__ import annotations
 
-import ast
 import re
 from pathlib import Path
 
 from backend.config import settings
+from backend.indexer.source_files import edges_for_file, iter_source_files
 
 
 def _read_file(repo: Path, rel: str) -> str:
     path = repo / rel
     if not path.exists():
         return ""
-    return path.read_text(encoding="utf-8")
+    return path.read_text(encoding="utf-8", errors="replace")
 
 
 def extract_imports(source: str, file_path: str) -> list[tuple[str, str]]:
-    """Return list of (file_path, imported_module) edges."""
-    edges: list[tuple[str, str]] = []
-    try:
-        tree = ast.parse(source)
-    except SyntaxError:
-        return edges
+    """Backward-compatible helper for tests — Python imports only."""
+    from backend.indexer.source_files import extract_python_imports
 
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                edges.append((file_path, alias.name))
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            edges.append((file_path, node.module))
-    return edges
+    return [(e["from"], e["to"]) for e in extract_python_imports(source, file_path)]
 
 
 def build_graph(repo_path: Path | None = None) -> dict:
@@ -38,12 +28,10 @@ def build_graph(repo_path: Path | None = None) -> dict:
     nodes: set[str] = set()
     edges: list[dict] = []
 
-    for py_file in repo.rglob("*.py"):
-        rel = str(py_file.relative_to(repo))
+    for src in iter_source_files(repo):
+        rel = str(src.relative_to(repo))
         nodes.add(rel)
-        source = py_file.read_text(encoding="utf-8")
-        for _, mod in extract_imports(source, rel):
-            edges.append({"from": rel, "to": mod, "kind": "import"})
+        edges.extend(edges_for_file(src, repo))
 
     return {"nodes": sorted(nodes), "edges": edges}
 
@@ -57,19 +45,22 @@ def diff_summary_for_paths(repo_path: Path, changed_paths: list[str]) -> str:
 
 
 def affected_paths(changed_paths: list[str], graph: dict) -> list[str]:
-    """1-hop neighbors via import edges (heuristic)."""
+    """1-hop neighbors via import/include edges."""
     affected = set(changed_paths)
     for edge in graph.get("edges", []):
-        if edge["from"] in changed_paths:
-            affected.add(edge["to"])
-        if edge["to"] in changed_paths:
-            affected.add(edge["from"])
+        src, dst = edge["from"], edge["to"]
+        if src in changed_paths:
+            affected.add(dst)
+        if dst in changed_paths:
+            affected.add(src)
     return sorted(affected)
 
 
 def graph_excerpt(graph: dict, paths: list[str], limit: int = 30) -> str:
     relevant = [e for e in graph.get("edges", []) if e["from"] in paths or e["to"] in paths]
-    return "\n".join(f"{e['from']} -> {e['to']}" for e in relevant[:limit])
+    return "\n".join(
+        f"{e['from']} -[{e.get('kind', 'edge')}]-> {e['to']}" for e in relevant[:limit]
+    )
 
 
 def detect_boundary_hint(diff_text: str) -> bool:
@@ -79,7 +70,7 @@ def detect_boundary_hint(diff_text: str) -> bool:
         return False
     return bool(
         re.search(
-            r"(from\s+packages\.payments|import\s+packages\.payments)",
+            r"(from\s+packages\.payments|import\s+packages\.payments|#include\s+[\"<].*payments)",
             diff_text,
         )
     )

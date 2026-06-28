@@ -7,9 +7,10 @@ import json
 from pathlib import Path
 
 from backend.config import settings
-from backend.indexer.graph import extract_imports
+from backend.indexer.source_files import edges_for_file, iter_source_files
 
-_CACHE_VERSION = 1
+# Bump when edge extraction rules change (e.g. added C/C++ includes).
+_CACHE_VERSION = 2
 
 
 def _cache_path(repo: Path) -> Path:
@@ -35,39 +36,34 @@ def build_graph_cached(repo_path: Path | None = None) -> dict:
     files_meta: dict = cached.get("files", {})
     all_edges: list[dict] = []
     nodes: set[str] = set()
-    seen_edges: set[tuple[str, str]] = set()
+    seen_edges: set[tuple[str, str, str]] = set()
 
-    py_files = list(repo.rglob("*.py"))
+    source_files = iter_source_files(repo)
     current_paths = set()
 
-    for py_file in py_files:
-        rel = str(py_file.relative_to(repo))
+    for src in source_files:
+        rel = str(src.relative_to(repo))
         current_paths.add(rel)
         nodes.add(rel)
-        mtime = _file_mtime(py_file)
+        mtime = _file_mtime(src)
 
         entry = files_meta.get(rel)
         if entry and entry.get("mtime") == mtime:
             for edge in entry.get("edges", []):
-                key = (edge["from"], edge["to"])
+                key = (edge["from"], edge["to"], edge.get("kind", ""))
                 if key not in seen_edges:
                     seen_edges.add(key)
                     all_edges.append(edge)
             continue
 
-        source = py_file.read_text(encoding="utf-8")
-        file_edges = [
-            {"from": rel, "to": mod, "kind": "import"}
-            for _, mod in extract_imports(source, rel)
-        ]
+        file_edges = edges_for_file(src, repo)
         files_meta[rel] = {"mtime": mtime, "edges": file_edges}
         for edge in file_edges:
-            key = (edge["from"], edge["to"])
+            key = (edge["from"], edge["to"], edge.get("kind", ""))
             if key not in seen_edges:
                 seen_edges.add(key)
                 all_edges.append(edge)
 
-    # Drop deleted files from cache
     for stale in set(files_meta.keys()) - current_paths:
         del files_meta[stale]
 
