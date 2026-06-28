@@ -48,6 +48,7 @@ async def build_context_preview(req: VerifyRequest) -> dict:
     return {
         "repo_path": str(repo),
         "used_git_diff": scope.used_git,
+        "warning": scope.warning,
         "changed_paths": scope.changed_paths,
         "affected_paths": affected,
         "graph_excerpt": excerpt,
