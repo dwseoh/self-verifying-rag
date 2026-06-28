@@ -1,3 +1,12 @@
 {
-  "findings": []
+  "findings": [
+    {
+      "severity": "low",
+      "title": "Runbook cross-reference gap",
+      "explanation": "Change touches checkout but RUNBOOK_CHECKOUT_002 warns against direct payments imports — aligns with violation.",
+      "citation_ids": ["RUNBOOK_CHECKOUT_002"],
+      "related_paths": ["apps/web/checkout.py"],
+      "recommended_fix": "Ensure checkout flow matches runbook gateway-only path."
+    }
+  ]
 }

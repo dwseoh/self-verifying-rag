@@ -1,11 +1,19 @@
 import asyncio
 import time
 import uuid
-from pathlib import Path
 
-from backend.agents import base, run_architecture_boundary, run_incident_pattern, run_risk
+from backend.agents import (
+    base,
+    run_architecture_boundary,
+    run_convention,
+    run_doc_drift,
+    run_incident_pattern,
+    run_risk,
+)
 from backend.config import settings
 from backend.indexer import graph as graph_indexer
+from backend.indexer.graph_cache import build_graph_cached
+from backend.indexer.scope import resolve_scope
 from backend.models import (
     AgentResult,
     AgentTimelineEntry,
@@ -15,27 +23,93 @@ from backend.models import (
     VerifyRequest,
 )
 from backend.pipeline import composer
-from backend.retrieval.retriever import load_corpus, retrieve
+from backend.retrieval.retriever import corpus_relevance, corpus_weak, load_corpus, retrieve
 from backend.scoring import confidence as confidence_scoring
+
+# All micro-verifiers fan out in parallel (MVP: 3, Sprint 3: 5)
+AGENT_RUNNERS = [
+    run_architecture_boundary,
+    run_convention,
+    run_doc_drift,
+    run_incident_pattern,
+    run_risk,
+]
+
+
+async def build_context_preview(req: VerifyRequest) -> dict:
+    """Show what would be sent to agents — no LLM calls."""
+    repo = settings.resolve_repo_path(req.repo_path)
+    scope = resolve_scope(repo, req)
+    g = build_graph_cached(repo)
+    affected = graph_indexer.affected_paths(scope.changed_paths, g)
+    excerpt = graph_indexer.graph_excerpt(g, affected)
+    corpus = load_corpus()
+    chunks = retrieve(
+        f"{scope.diff_summary}\n{' '.join(scope.changed_paths)}",
+        corpus,
+        top_k=5,
+        changed_paths=scope.changed_paths,
+    )
+    warnings: list[str] = []
+    if scope.warning:
+        warnings.append(scope.warning)
+    if corpus_weak(chunks):
+        warnings.append(
+            "Corpus has weak relevance to this change — doc-based findings may be unreliable. "
+            "Graph checks still apply. For repo-specific rules, set TRUSTLOOP_CORPUS_PATH in .env "
+            "to a local docs folder (not committed)."
+        )
+    return {
+        "repo_path": str(repo),
+        "used_git_diff": scope.used_git,
+        "warning": scope.warning,
+        "changed_paths": scope.changed_paths,
+        "affected_paths": affected,
+        "graph_excerpt": excerpt,
+        "diff_summary_preview": scope.diff_summary[:4000],
+        "retrieved_chunks": [c.model_dump() for c in chunks],
+        "corpus_max_score": corpus_relevance(chunks),
+        "warnings": warnings,
+        "agents_planned": len(AGENT_RUNNERS),
+        "llm_mode": "mock" if settings.use_mock else "cerebras",
+        "graph_stats": {
+            "nodes": len(g.get("nodes", [])),
+            "edges": len(g.get("edges", [])),
+            "cached_files": g.get("cached_files"),
+        },
+    }
 
 
 async def run_verification(req: VerifyRequest) -> VerificationRun:
     t0 = time.perf_counter()
-    repo = Path(req.repo_path) if req.repo_path else settings.trustloop_repo_path
-    changed = req.changed_paths or ["apps/web/checkout.py"]
+    repo = settings.resolve_repo_path(req.repo_path)
 
     t_index = time.perf_counter()
-    g = graph_indexer.build_graph(repo)
-    scope = graph_indexer.affected_paths(changed, g)
-    diff = req.diff_summary or graph_indexer.diff_summary_for_paths(repo, changed)
-    excerpt = graph_indexer.graph_excerpt(g, scope)
+    scope = resolve_scope(repo, req)
+    changed = scope.changed_paths
+    g = build_graph_cached(repo)
+    affected = graph_indexer.affected_paths(changed, g)
+    excerpt = graph_indexer.graph_excerpt(g, affected)
+    diff = scope.diff_summary
     indexing_ms = int((time.perf_counter() - t_index) * 1000)
 
     t_ret = time.perf_counter()
     corpus = load_corpus()
     query = f"{diff}\n{' '.join(changed)}"
-    chunks = retrieve(query, corpus, top_k=5)
+    chunks = retrieve(query, corpus, top_k=5, changed_paths=changed)
+    max_corpus_score = corpus_relevance(chunks)
+    weak_corpus = corpus_weak(chunks)
     retrieval_ms = int((time.perf_counter() - t_ret) * 1000)
+
+    warnings: list[str] = []
+    if scope.warning:
+        warnings.append(scope.warning)
+    if weak_corpus:
+        warnings.append(
+            "Corpus has weak relevance to this change — doc-based findings may be unreliable. "
+            "Graph checks still apply. For repo-specific rules, set TRUSTLOOP_CORPUS_PATH in .env "
+            "to a local docs folder (not committed)."
+        )
 
     ctx = base.AgentContext(
         trigger=req.trigger.value,
@@ -47,9 +121,7 @@ async def run_verification(req: VerifyRequest) -> VerificationRun:
 
     t_par = time.perf_counter()
     raw_results = await asyncio.gather(
-        run_architecture_boundary(ctx),
-        run_incident_pattern(ctx),
-        run_risk(ctx),
+        *[runner(ctx) for runner in AGENT_RUNNERS],
         return_exceptions=True,
     )
     parallel_ms = int((time.perf_counter() - t_par) * 1000)
@@ -61,7 +133,9 @@ async def run_verification(req: VerifyRequest) -> VerificationRun:
     for r in raw_results:
         if isinstance(r, Exception):
             verification_incomplete = True
-            timeline.append(AgentTimelineEntry(agent="unknown", status="error", latency_ms=0, error=str(r)))
+            timeline.append(
+                AgentTimelineEntry(agent="unknown", status="error", latency_ms=0, error=str(r))
+            )
             continue
         agent_results.append(r)
         timeline.append(
@@ -97,8 +171,11 @@ async def run_verification(req: VerifyRequest) -> VerificationRun:
         changed_paths=changed,
         findings=findings,
         risk_level=risk_level,  # type: ignore[arg-type]
-        overall_confidence=confidence_scoring.overall_confidence(findings, verification_incomplete),
+        overall_confidence=confidence_scoring.overall_confidence(
+            findings, verification_incomplete, corpus_weak=weak_corpus
+        ),
         verification_incomplete=verification_incomplete,
+        warnings=warnings,
         agent_timeline=timeline,
         retrieved_chunks=chunks,
         latency=LatencyBreakdown(
@@ -109,8 +186,9 @@ async def run_verification(req: VerifyRequest) -> VerificationRun:
             total_ms=total_ms,
         ),
         metadata=RunMetadata(
-            files_checked=len(scope),
+            files_checked=len(affected),
             citations_consulted=len(chunks),
             agents_run=len(timeline),
+            corpus_max_score=max_corpus_score,
         ),
     )

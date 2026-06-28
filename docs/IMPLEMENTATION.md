@@ -49,7 +49,9 @@ GITHUB (source of truth — commit these)
 
 NOT IN GITHUB (runtime / secrets — gitignored)
 ├── .env                         # CEREBRAS_API_KEY
-├── data/store/*.json            # review state, run log (MVP)
+├── data/store/*.json            # graph cache, run log
+├── data/orbital/                # local clones — never commit
+├── data/clones/                 # local clones — never commit
 └── .venv/, node_modules/
 ```
 
@@ -200,10 +202,19 @@ Priority order: models → mock API → fixture UI → indexer → 1 agent (arch
 
 **Goal:** Judge-ready demo.
 
-- [ ] `DEMO_SCRIPT.md`
-- [ ] Reset script for checkout.py
-- [ ] Error UI when API key missing
+- [x] `DEMO_SCRIPT.md`
+- [x] Reset script for checkout.py
+- [x] `GET /health/llm` — live Cerebras ping
+- [ ] Error UI when API key missing (Person B)
 - [ ] Demo run ×2 without failure
+
+### Phase 3 — Sprint 3 backend (Add-ons A1–A3)
+
+- [x] **A1** `scripts/watch-save.py` — debounced save → POST verify
+- [x] **A2** Agents +2: `convention`, `doc_drift` (5 parallel verifiers)
+- [x] **A3** MCP: `backend/mcp/server.py` + `scripts/run-mcp.sh`
+- [x] LLM: retry, JSON repair, `check_llm_connection()`
+- [x] `GET /api/findings/latest` for UI polling
 
 ### Phase 3+ — Add-ons (only after Phase 2)
 

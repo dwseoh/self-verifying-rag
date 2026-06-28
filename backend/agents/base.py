@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
+from backend.indexer.graph import detect_boundary_hint
 from backend.llm import cerebras_client
 from backend.models import AgentResult, CorpusChunk, Finding, Severity
 
@@ -47,11 +48,13 @@ Corpus chunks:
 
 If no issue, return {{"findings": []}}.
 """
+    has_violation = detect_boundary_hint(ctx.diff_summary)
     try:
         data, latency_ms = await cerebras_client.complete_json(
             agent_name=agent_name,
             system=system,
             user=user,
+            use_mock_findings=has_violation,
         )
         findings: list[Finding] = []
         for raw in data.get("findings", []):

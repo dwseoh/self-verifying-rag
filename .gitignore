@@ -22,8 +22,16 @@ data/store/*.json
 data/store/*.jsonl
 !data/store/.gitkeep
 
+# Nested git repo for branch-verify demos (created by scripts/init-demo-repo-git.sh)
+data/demo_repo/.git/
+
+# Local clones of external repos for verify testing — never commit
+data/orbital/
+data/clones/
+
 # IDE
 .idea/
 .vscode/
 *.swp
 .DS_Store
+.cursor

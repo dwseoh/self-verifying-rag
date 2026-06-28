@@ -1,3 +1,12 @@
 {
-  "findings": []
+  "findings": [
+    {
+      "severity": "medium",
+      "title": "Convention PYTHON_STYLE_001 violated",
+      "explanation": "Web layer imports packages.payments directly; CONTRIBUTING requires web to use apps/api only.",
+      "citation_ids": ["PYTHON_STYLE_001"],
+      "related_paths": ["apps/web/checkout.py"],
+      "recommended_fix": "Remove direct payments import; use apps.api.payments_gateway."
+    }
+  ]
 }
