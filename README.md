@@ -1,9 +1,9 @@
 # TrustLoop
 
-TrustLoop is a real-time self-verifying enterprise RAG assistant powered by Gemma 4 on Cerebras.
+TrustLoop is an ambient code assurance layer powered by Gemma on Cerebras.
 
-It answers questions from enterprise documents, extracts factual claims, verifies citations with parallel agents, flags unsupported claims, and returns a confidence score with an audit trail.
+It continuously verifies code changes against architecture rules, engineering conventions, ADRs, and past incidents — running many micro-verifier agents in parallel on every meaningful edit, commit, or PR. Findings ship with citations and confidence scores, not just retrieved docs.
 
 ## Why Cerebras?
 
-TrustLoop runs multiple verifier agents in parallel before showing the answer. This would normally add too much latency, but Cerebras makes the verification loop fast enough to feel instant.
+Verification only works if it runs often enough to matter. Cerebras makes parallel micro-inference fast enough for live save-time checks, not just slow PR audits. See `docs/PRD.md` for sprint plan and scope.

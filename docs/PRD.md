@@ -1,962 +1,732 @@
 # TrustLoop PRD
 
-## Real-Time Verified Enterprise AI Answers
+## Ambient Code Assurance Powered by Parallel Inference
 
 ## 1. Product Summary
 
-TrustLoop is a self-verifying enterprise AI assistant that answers questions from company documents and automatically verifies every response before showing it to the user.
+TrustLoop is an **ambient code assurance layer** for engineering teams. It continuously verifies code changes against architecture rules, engineering conventions, internal documentation, and past incidents — and surfaces evidence-backed findings before bad patterns ship.
 
-Instead of acting like a standard RAG chatbot, TrustLoop turns every answer into a claim-level audit trail. When a user asks a question, the system retrieves relevant enterprise documents, generates an answer, extracts factual claims, and runs multiple verifier agents in parallel to check whether the answer is actually supported by the source material.
+Unlike enterprise knowledge MCPs that **retrieve** information on demand, TrustLoop **acts**: it runs many small verifier agents in parallel on every meaningful code event, scores confidence deterministically, and returns citations to the source material that triggered each finding.
 
-The user receives:
+The core technical insight is not only that verification can run in parallel — it is that **Cerebras ultra-fast Gemma inference makes verification frequent enough to feel live**. TrustLoop can run 8–15 micro-verifier calls per change in under a second, enabling a product closer to semantic spell-check than a nightly audit bot.
 
-- A verified answer
-- A confidence score
-- Supporting citations
-- Claim-by-claim verification
-- Highlighted unsupported or uncertain claims
-- Suggested corrections
-- Suggested document improvements for human review
-- Latency metrics showing how fast verification completed
+TrustLoop is not a chatbot over your wiki. It is a **real-time immune system for code and engineering knowledge**.
 
-The core technical insight is that enterprise verification is usually too slow to happen live. Cerebras ultra-fast inference makes it possible to run several Gemma 4 verifier agents in parallel with almost no noticeable delay.
+### What the user receives
 
-TrustLoop is not just a faster chatbot. It is a real-time verification and assurance layer for enterprise knowledge.
+- Inline findings on code changes (boundary violations, convention breaks, doc drift, incident-pattern matches)
+- Evidence snippets with citation IDs from policies, ADRs, runbooks, and postmortems
+- Per-finding confidence and severity
+- A human-confirmed architecture map that improves verification quality over time
+- Optional test-failure RCA swarm (parallel hypotheses ranked with evidence)
+- Audit trail per change (commit, PR, or manual verify)
+- Latency metrics showing parallel agent fan-out
 
 ---
 
 ## 2. Problem
 
-Enterprise teams are adopting AI assistants to search internal knowledge bases, policies, contracts, incident reports, support playbooks, technical documentation, and compliance material.
+Enterprise engineering teams already have:
 
-However, most enterprise RAG systems have a major trust problem.
+- Internal knowledge bases (Confluence, Notion, ADRs)
+- Coding standards and review checklists
+- Incident postmortems and “never again” lessons
+- Architecture diagrams that drift from implementation
+- Knowledge MCPs that answer questions when asked
 
-They can produce answers that sound confident but may be:
+What they do **not** have is a system that **consistently verifies code against that knowledge** as developers work.
 
-- Unsupported by the source documents
-- Based on weak or irrelevant citations
-- Missing important exceptions
-- Contradicted by another document
-- Hallucinated
-- Too risky for compliance, legal, support, or security workflows
+### Failure modes today
 
-For enterprise users, the problem is not only getting an answer. The problem is knowing whether the answer can be trusted.
+| Approach | Limitation |
+|----------|------------|
+| Knowledge MCP / RAG chat | Retrieves docs; does not verify the current diff |
+| Static lint / formatters | Fast, but cannot reason about architecture intent or policy |
+| PR-only LLM review | Too slow and too late; often one shallow pass |
+| Manual architecture reviews | Do not scale; docs go stale immediately |
 
-A standard RAG assistant may say:
+### Example
 
-> “Yes, customer data can be uploaded to approved analytics tools.”
+A developer adds a cross-service import in a monorepo:
 
-But a compliance-safe answer may need to include:
+```python
+from payments.client import charge_customer  # UI layer calling payments directly
+```
 
-- Vendor approval requirements
-- Encryption requirements
-- Data retention limits
-- Restrictions on raw customer identifiers
-- Human review requirements
+A knowledge MCP might retrieve the architecture doc stating UI must not call payments directly — **if someone asks**.
 
-Users should not need to manually inspect every citation to figure out whether the AI answer is safe. TrustLoop automates that verification step.
+TrustLoop should surface within a second:
 
----
-
-## 3. Target Users
-
-### Primary Users
-
-TrustLoop is designed for enterprise teams that work with high-stakes internal knowledge.
-
-Target users include:
-
-- Compliance analysts
-- Legal operations teams
-- Customer support leads
-- Security analysts
-- Technical support engineers
-- Product operations teams
-- Internal knowledge management teams
-- Risk and governance teams
-
-### Primary Hackathon Persona
-
-**Compliance analyst at a fictional fintech company**
-
-This user needs to answer policy questions quickly, but also needs confidence that the answer is grounded in approved internal documents.
-
-Example question:
-
-> “Can our support team upload customer financial documents into a third-party analytics tool for churn analysis?”
-
-This is a strong demo use case because a wrong answer could create privacy, compliance, and business risk.
+> **Boundary violation (high)** — `ADR-004` and `postmortem-2024-03` require UI → API gateway → payments. Citation: `ARCH_ADR_004`, `INCIDENT_PM_2024_03`. Confidence: 82.
 
 ---
 
-## 4. Product Vision
+## 3. Why Cerebras Changes the Product
 
-TrustLoop becomes the verification layer between enterprise users and AI-generated answers.
+Slow inference forces batch verification (PR time, scheduled scans). Fast inference enables **frequency × parallelism**.
 
-The long-term vision is:
+### Two unlocks
 
-> Every enterprise AI answer should come with proof.
+1. **Parallelism** — Run factual, convention, architecture, doc-drift, incident-pattern, and risk micro-verifiers concurrently.
+2. **Frequency** — Run scoped verification on debounced save, test failure, commit, and PR — not just one event type.
 
-In the future, TrustLoop could integrate with:
+### Product shift
 
-- Slack
-- Microsoft Teams
-- Notion
-- Confluence
-- Google Drive
-- SharePoint
-- Jira
-- ServiceNow
-- Internal support tools
-- Enterprise search systems
+| Slow-inference product | Cerebras-native product |
+|------------------------|-------------------------|
+| Verify on PR | Verify on **save + commit + PR** |
+| 5 heavy agents | **8–15 micro-verifiers** per scoped change |
+| Background batch job | **Always-on shadow layer** |
+| One interpretation | **Speculative hypotheses** checked in parallel |
+| “Audit tool” | **Ambient assurance** |
 
-Instead of replacing existing enterprise knowledge systems, TrustLoop sits on top of them and makes AI answers more trustworthy.
+### Hackathon pitch line
 
-Over time, TrustLoop should also help enterprises reduce documentation decay. When the system finds unsupported claims, weak citations, contradictions, missing policy coverage, or ambiguous source language, it can turn those verification findings into suggested document improvements for a human reviewer.
-
-The product vision is not autonomous document editing. TrustLoop proposes improvements, humans approve them, and approved changes make the knowledge base stronger for future answers.
+> Cerebras does not just make code review faster. It makes **continuous engineering verification** usable.
 
 ---
 
-## 5. Self-Learning Documentation Loop
+## 4. Target Users
 
-TrustLoop creates a human-in-the-loop improvement cycle for enterprise knowledge bases.
+### Primary users
 
-The core loop:
+- Platform / developer experience engineers
+- Staff engineers and tech leads
+- Security and application security engineers
+- Engineering managers responsible for architecture quality
+- Teams in regulated environments (fintech, health, infra)
 
-1. User asks a question.
-2. TrustLoop retrieves documents, answers, and verifies the answer.
-3. Verifier agents detect gaps, ambiguity, weak citations, unsupported claims, or contradictions.
-4. TrustLoop generates suggested document improvements.
-5. A human reviewer approves, rejects, or edits each suggestion.
-6. Approved changes improve the document corpus.
-7. Future answers become more accurate, better cited, and easier to trust.
+### Primary hackathon persona
 
-For the 24-hour MVP, this should appear as a lightweight **Document Improvement Suggestions** panel. The panel can show a small number of suggested updates, the evidence that triggered them, and a review status. It does not need to update source documents automatically.
+**Platform engineer at Northstar Bank (fictional fintech)**
 
-This makes TrustLoop feel larger than answer verification without overbuilding the hackathon product. The MVP proves the loop by showing that every verification failure can become a concrete improvement opportunity.
+Maintains a payments monorepo with strict service boundaries, data-handling policies, and incident history. Needs violations caught **while coding**, not only at PR review.
 
----
+### Secondary persona
 
-## 6. Value Proposition
-
-### For Employees
-
-TrustLoop helps users get fast answers they can actually trust.
-
-Users can:
-
-- Ask natural language questions
-- Receive grounded answers
-- See which claims are supported
-- Identify uncertain claims immediately
-- Avoid manually checking every document
-- Make better decisions faster
-- Surface documentation gaps that need human attention
-
-### For Enterprises
-
-TrustLoop reduces the risk of deploying AI in sensitive business workflows.
-
-Enterprises benefit from:
-
-- Lower hallucination risk
-- Better citation quality
-- Stronger auditability
-- Faster knowledge retrieval
-- Safer compliance workflows
-- More trustworthy internal AI adoption
-- Reduced documentation decay through human-approved improvements
-
-### For the Hackathon
-
-TrustLoop clearly demonstrates why Cerebras speed matters.
-
-The product requires multiple LLM calls:
-
-1. Generate answer
-2. Extract claims
-3. Verify factual support
-4. Check citations
-5. Detect contradictions
-6. Assess risk
-7. Produce confidence score
-8. Rewrite unsafe claims
-
-On slower inference, this multi-agent verification loop would feel too slow. With Cerebras, verification becomes fast enough to happen before the user even notices the wait.
+**Compliance-adjacent engineer** verifying that implementation matches data-handling and vendor policies embedded in the engineering corpus.
 
 ---
 
-## 7. Why Latency Matters
+## 5. Product Vision
 
-Most enterprise AI assistants follow a simple flow:
+TrustLoop becomes the **verification layer between code changes and engineering knowledge**.
 
-1. Retrieve documents
-2. Generate answer
-3. Show answer
+Long term:
 
-TrustLoop follows a more trustworthy flow:
+- IDE extension for live diagnostics
+- MCP tools for coding agents (Cursor, Claude Code)
+- CI / PR gates with audit export
+- Human-confirmed architecture graph as shared truth
+- Approved updates to ADRs/runbooks when verification finds doc drift
 
-1. Retrieve documents
-2. Generate answer
-3. Extract factual claims
-4. Verify each claim
-5. Check citation quality
-6. Detect unsupported statements
-7. Search for contradictions
-8. Score confidence
-9. Suggest corrections
-10. Show verified answer
-
-This flow is more reliable, but it creates more LLM calls.
-
-Without fast inference, the user would have to wait too long. Verification would become a separate slow process, not part of the live user experience.
-
-Cerebras makes the product possible because multiple Gemma 4 agents can run in parallel with extremely low latency.
-
-The key demo message:
-
-> Cerebras does not just make TrustLoop faster. Cerebras makes real-time enterprise verification usable.
+TrustLoop does **not** auto-edit source docs or code. It proposes findings and documentation improvements; humans approve.
 
 ---
 
-## 8. User Stories
+## 6. Trigger Model
 
-### User Story 1: Ask an Enterprise Question
+Verification depth scales by event. Full multi-agent RAG must **not** run identically on every event — scope and agent count vary.
 
-As a compliance analyst, I want to ask a question about internal policies so that I can quickly understand what is allowed.
+| Event | Scope | Agents | Blocking? |
+|-------|-------|--------|-----------|
+| Debounced save | Touched file + immediate dependencies | 6–10 micro-verifiers | No — inline advisory |
+| Test failure | Failing test + related files | RCA swarm (4–6 hypotheses) | No |
+| Commit (post-commit hook) | Commit diff + affected subgraph | 8–12 micro-verifiers | No — async queue |
+| PR open / update | Branch diff vs base | Full verification pass | Yes — configurable gate |
+| Human confirms architecture fact | Affected subgraph refresh | Targeted re-verify | No |
+| Nightly (stretch) | Full repo | Deep doc-drift + map refresh | No |
 
-Acceptance criteria:
+### Implementation note
 
-- User can enter a natural language question.
-- System retrieves relevant enterprise documents.
-- System generates a direct answer.
-- Answer includes citations from the document corpus.
-
----
-
-### User Story 2: See Verified Claims
-
-As a user, I want the answer broken into factual claims so that I can see exactly what the AI is asserting.
-
-Acceptance criteria:
-
-- System extracts atomic factual claims from the answer.
-- Each claim is shown in a claim ledger.
-- Each claim has a support status.
-- Each claim has a confidence score.
+Post-commit async is the default “always on” path when no IDE is connected. Live save verification is the **hero demo** path when an extension or local daemon is present.
 
 ---
 
-### User Story 3: Check Citation Quality
+## 7. System Surfaces
 
-As a user, I want to know whether citations actually support the claims they are attached to.
+TrustLoop is one **verification engine** with multiple surfaces. Do not conflate them.
 
-Acceptance criteria:
+```txt
+┌─────────────────────────────────────────────────────────┐
+│ Surfaces                                                │
+│  • IDE extension / local panel (primary UX)             │
+│  • MCP server (agent-callable tools)                    │
+│  • CI action / PR comment bot (team policy)             │
+│  • Web dashboard (review queue, architecture map)       │
+└───────────────────────────┬─────────────────────────────┘
+                            │
+┌───────────────────────────▼─────────────────────────────┐
+│ Verification engine                                     │
+│  • Repo indexer (deterministic graph)                   │
+│  • RAG retriever (policies, ADRs, postmortems)          │
+│  • Parallel micro-verifiers (Gemma on Cerebras)         │
+│  • Deterministic confidence aggregator                  │
+│  • Finding composer + review store                      │
+└─────────────────────────────────────────────────────────┘
+```
 
-- System checks each claim against cited source text.
-- Citations are classified as strong, partial, weak, or missing.
-- Weak citations are flagged.
-- Source snippets are displayed.
+### MCP role
 
----
+MCP is an **integration layer**, not the whole product. Expose tools such as:
 
-### User Story 4: Detect Unsupported Claims
+- `verify_diff(base, head, paths?)`
+- `verify_file(path)`
+- `get_findings(severity?, status?)`
+- `get_architecture_map(scope?)`
+- `confirm_architecture_fact(fact_id, approved, edited_text?)`
+- `search_engineering_corpus(query)`
 
-As a compliance analyst, I want unsupported or uncertain claims highlighted so that I do not accidentally rely on risky information.
+Background verification requires a **runner** (daemon, git hook, or CI) that invokes the engine; MCP alone is pull-oriented.
 
-Acceptance criteria:
+### Extension role
 
-- Unsupported claims are visually highlighted.
-- Uncertain claims are visually marked.
-- System explains why the claim is unsupported or uncertain.
-- System suggests a safer correction.
-
----
-
-### User Story 5: Receive Confidence Score
-
-As a manager, I want an overall confidence score so that I can quickly decide whether the answer is safe to use or needs human review.
-
-Acceptance criteria:
-
-- System returns a confidence score from 0 to 100.
-- Score is based on claim support, citation strength, contradiction checks, and risk level.
-- Low-confidence responses are clearly marked.
-- High-risk responses recommend human review.
-
----
-
-### User Story 6: Understand AI Risk
-
-As an enterprise user, I want the system to identify risk level so that I can treat legal, compliance, privacy, or security answers more carefully.
-
-Acceptance criteria:
-
-- System labels the answer as low, medium, or high risk.
-- System explains the reason for the risk level.
-- High-risk answers include a human review warning.
+Primary developer UX: inline diagnostics, finding details with citations, “confirm fact” actions, manual “verify branch” trigger.
 
 ---
 
-### User Story 7: See Speed Advantage
+## 8. Human-in-the-Loop Architecture Map
 
-As a judge or evaluator, I want to see how fast the system performs multi-agent verification so that I understand why Cerebras matters.
+LLM-generated architecture diagrams hallucinate. TrustLoop uses a **confirmed graph**:
 
-Acceptance criteria:
+1. **Deterministic layer** — imports, packages, services, APIs, config (no LLM).
+2. **LLM labeling layer** — proposes boundaries, ownership, allowed call paths.
+3. **Human confirmation** — reviewer approves/edits facts; stored as verified truth.
+4. **Fast re-verification** — on fact confirm or related code change, re-check affected subgraph using Cerebras speed.
 
-- UI displays end-to-end latency.
-- UI displays generation time.
-- UI displays parallel verification time.
-- UI displays number of agents run.
-- UI displays number of claims checked.
-- Demo shows multiple verifier agents finishing quickly.
+Architecture facts are first-class objects with `status: proposed | confirmed | rejected`.
 
 ---
 
-### User Story 8: Review Suggested Document Improvements
+## 9. User Stories
 
-As a knowledge manager, I want to review suggested document improvements so that gaps found during verification can become safer, clearer source material.
+### US-1: Live boundary warning
 
-Acceptance criteria:
+As a developer, I want boundary violations surfaced while I edit so I do not discover them days later in PR review.
 
-- System identifies documentation gaps, ambiguous source language, weak citations, or contradictions.
-- System generates suggested document updates with supporting evidence.
-- Suggested updates are shown as pending human review.
-- Reviewer can approve, reject, or mark a suggestion for editing.
-- Approved suggestions are tracked in the audit trail.
+**Acceptance criteria:**
 
----
-
-### User Story 9: Check Codebase Documentation Against Implementation
-
-As an engineering lead, I want TrustLoop to compare codebase documentation with implementation so that architecture docs and requirements do not drift from reality.
-
-Acceptance criteria:
-
-- System can connect to a repository in a future workflow.
-- System maps files, services, APIs, dependencies, and ownership.
-- System answers architecture questions using docs and code context.
-- System flags when implementation appears inconsistent with documentation or requirements.
-- System suggests documentation updates for human review.
-
-This is a stretch or future platform use case, not a requirement for the 24-hour MVP.
+- Debounced save triggers scoped verification in &lt; 2s (target &lt; 1s with warm cache).
+- Finding includes severity, explanation, and citation IDs.
+- Finding links to relevant source doc snippet.
 
 ---
 
-## 9. Functional Requirements
+### US-2: Convention and style contract checks
 
-### F1. Document Corpus
+As a tech lead, I want convention rules from `CONTRIBUTING.md` and internal guides enforced semantically, not only by regex.
 
-The system must support a small enterprise demo corpus.
+**Acceptance criteria:**
 
-For the hackathon MVP, the corpus can be preloaded instead of uploaded live.
-
-Example corpus:
-
-- Data Handling Policy
-- Vendor Risk Policy
-- Customer Support Playbook
-- Data Retention Policy
-- AI Usage Policy
-- Incident Response Policy
-
-Each document should be chunked and assigned citation IDs.
-
-Example citation ID:
-
-> DATA_POLICY_3.2
+- Convention verifier runs in parallel with other micro-verifiers.
+- Weak/ambiguous convention findings are marked uncertain, not high confidence.
 
 ---
 
-### F2. Question Input
+### US-3: Doc drift detection
 
-The system must allow the user to submit a natural language question.
+As a staff engineer, I want to know when code contradicts ADRs or README claims.
 
-Example:
+**Acceptance criteria:**
 
-> “Can our support team upload customer financial documents into a third-party analytics tool for churn analysis?”
-
----
-
-### F3. Retrieval
-
-The system must retrieve relevant chunks from the document corpus.
-
-The retrieval system should return:
-
-- Chunk text
-- Document title
-- Section title
-- Citation ID
-- Similarity score
-
-For the MVP, retrieval can use:
-
-- FAISS
-- Chroma
-- In-memory vector search
-- Keyword search as fallback
+- Doc-drift verifier compares change summary against retrieved ADR/README chunks.
+- Contradictions cite both code context and doc citation ID.
 
 ---
 
-### F4. Primary Answer Generation
+### US-4: Past incident pattern match
 
-The primary answer agent must generate a concise answer using only retrieved context.
+As a platform engineer, I want new code flagged when it resembles patterns from postmortems.
 
-The answer must include citations.
+**Acceptance criteria:**
 
-The agent should be instructed not to use outside knowledge.
+- Incident corpus is searchable via RAG.
+- Matches include incident ID, pattern description, and recommended fix.
 
-Output should be structured JSON.
+---
 
-Example output:
+### US-5: Test failure RCA swarm
+
+As a developer, when tests fail I want parallel hypotheses (bug vs flaky test vs doc stale vs config) ranked with evidence.
+
+**Acceptance criteria:**
+
+- Triggered manually or via test-runner hook in demo.
+- At least 4 hypotheses checked in parallel.
+- Results returned in one aggregated response with timings.
+
+---
+
+### US-6: PR verification gate
+
+As an engineering manager, I want high-severity findings to block merge or require explicit acknowledgment.
+
+**Acceptance criteria:**
+
+- CI action calls `POST /api/verify` with base/head SHAs.
+- PR summary lists findings, confidence, citations, agent count, total latency.
+- Configurable fail threshold (e.g. any `high` unacknowledged finding).
+
+---
+
+### US-7: Confirm architecture facts
+
+As a tech lead, I want to approve or correct proposed architecture boundaries so future checks use trusted facts.
+
+**Acceptance criteria:**
+
+- UI/MCP exposes pending proposed facts.
+- Confirming a fact triggers targeted re-verification of dependent files.
+- Confirmed facts appear in audit trail.
+
+---
+
+### US-8: MCP tools for coding agents
+
+As a developer using Cursor, I want the coding agent to call verification tools before suggesting risky changes.
+
+**Acceptance criteria:**
+
+- MCP server exposes `verify_diff` and `get_findings`.
+- Tool responses use stable JSON contracts (see Architecture doc).
+
+---
+
+### US-9: Speed and parallelism visible
+
+As a judge or evaluator, I want to see parallel micro-agents completing in sub-second wall time.
+
+**Acceptance criteria:**
+
+- UI shows per-agent latency, total fan-out time, agents run, files checked.
+- Demo highlights live save verification, not only PR batch mode.
+
+---
+
+### US-10: Suggested engineering doc updates
+
+As a knowledge owner, I want verification gaps turned into suggested ADR/runbook updates for human review.
+
+**Acceptance criteria:**
+
+- Gaps derived from verifier outputs (unsupported assumption, ambiguous ADR, missing exception).
+- Suggestions have `status: pending_review | approved | rejected`.
+- No automatic writes to corpus files.
+
+---
+
+## 10. Functional Requirements
+
+### F1. Demo repository and engineering corpus
+
+**Repository:** Small fictional Northstar Bank monorepo (2–4 services/packages) with at least one intentional boundary violation path for demo.
+
+**Corpus** (`data/engineering_corpus/`):
+
+- Architecture ADRs with citation IDs (e.g. `ARCH_ADR_004`)
+- Data handling / vendor policies (optional overlap with original policy demo)
+- `CONTRIBUTING.md` and convention docs
+- At least one postmortem (e.g. `INCIDENT_PM_2024_03`)
+- Service README files with explicit claims verifiable against code
+
+Citation ID convention matches policy sections: `ARCH_ADR_004`, `DATA_POLICY_3.2`, etc.
+
+---
+
+### F2. Deterministic repo indexer
+
+- Build import/call graph for demo monorepo.
+- Identify package/service boundaries and changed-file blast radius.
+- Output stable JSON: nodes, edges, `affected_by_change[path]`.
+- No LLM required for graph construction.
+
+---
+
+### F3. Engineering corpus retrieval
+
+- Chunk and index markdown corpus.
+- Return chunks with: `citation_id`, `document_title`, `section_title`, `text`, `score`.
+- Keyword fallback acceptable for MVP.
+
+---
+
+### F4. Verification API
+
+Primary endpoint:
+
+```txt
+POST /api/verify
+```
+
+Request (example):
 
 ```json
 {
-  "answer": "Yes, but only if the analytics vendor is approved, documents are encrypted, raw customer identifiers are removed, and data is deleted within the approved retention window.",
-  "citations": [
-    {
-      "claim": "The vendor must be approved.",
-      "citation_id": "VENDOR_POLICY_1.4"
-    }
-  ]
+  "repo_path": "/path/to/repo",
+  "base_ref": "main",
+  "head_ref": "HEAD",
+  "changed_paths": ["apps/web/checkout.py"],
+  "trigger": "save",
+  "include_test_context": false
 }
 ```
 
----
+Response (example):
 
-### F5. Claim Extraction
+```json
+{
+  "findings": [],
+  "architecture_facts_pending": [],
+  "suggested_doc_updates": [],
+  "latency": {
+    "indexing_ms": 40,
+    "retrieval_ms": 60,
+    "parallel_verification_ms": 520,
+    "total_ms": 780,
+    "agents_run": 8
+  },
+  "metadata": {
+    "trigger": "save",
+    "files_checked": 3,
+    "citations_consulted": 7
+  }
+}
+```
 
-The claim extraction agent must break the generated answer into atomic factual claims.
+Secondary endpoints (MVP or Sprint 4+):
 
-Example answer:
-
-> “Customer financial documents may be uploaded to approved third-party analytics tools only if encryption is enabled and raw customer identifiers are removed.”
-
-Extracted claims:
-
-1. Customer financial documents may be uploaded to third-party analytics tools.
-2. The third-party tool must be approved.
-3. Encryption must be enabled.
-4. Raw customer identifiers must be removed.
-
-Output should be structured JSON.
-
----
-
-### F6. Parallel Verification Agents
-
-The system must run multiple verifier agents in parallel using Cerebras Gemma 4.
-
-Recommended MVP agents:
-
-1. **Factual Support Agent**
-   - Checks whether each claim is supported by the retrieved documents.
-
-2. **Citation Match Agent**
-   - Checks whether the cited document actually supports the claim.
-
-3. **Contradiction Agent**
-   - Looks for source text that contradicts the generated answer.
-
-4. **Skeptic Agent**
-   - Tries to find hidden risks, missing exceptions, or overconfident claims.
-
-5. **Risk Agent**
-   - Assesses whether the answer involves compliance, legal, security, privacy, or business risk.
-
-6. **Confidence Agent**
-   - Produces a final confidence summary using the verifier outputs.
-
-For the MVP, the Confidence Agent can be replaced with deterministic scoring.
+- `GET /api/findings`
+- `POST /api/architecture/facts/{id}/review`
+- `POST /api/verify/test-failure` (RCA swarm)
 
 ---
 
-### F7. Claim Verification
+### F5. Parallel micro-verifiers (Gemma on Cerebras)
 
-Each claim must receive:
+All verifiers for a given request run via `asyncio.gather()` (or equivalent). **Serial verifier execution is out of scope.**
 
-- Claim ID
-- Claim text
-- Support status
-- Confidence score
-- Citation strength
-- Supporting citation
-- Explanation
-- Suggested correction if needed
+**MVP agents (3):**
 
-Supported statuses:
+| Agent | Purpose |
+|-------|---------|
+| **Architecture boundary** | Cross-service / layer violations vs ADRs |
+| **Incident pattern** | Postmortem anti-pattern match |
+| **Risk** | Security, privacy, compliance sensitivity |
 
-- Supported
-- Partially supported
-- Unsupported
-- Uncertain
+**Add-on A2 (+2 agents):** Convention, Doc drift.
 
-Citation strength statuses:
+**Add-on A7:** RCA swarm on test failure. **Stretch:** Skeptic, test adequacy.
 
-- Strong
-- Partial
-- Weak
-- None
+Each agent returns structured JSON with: `finding_id`, `severity`, `confidence`, `citation_ids[]`, `explanation`, `recommended_fix`, `related_paths[]`.
 
 ---
 
-### F8. Confidence Score
+### F6. Deterministic confidence aggregation
 
-The system must produce an overall confidence score from 0 to 100.
+Overall and per-finding confidence computed by fixed penalty rules — **not** by asking the LLM for a score. See `docs/ARCHITECTURE.md` for formula pattern.
 
-Suggested formula:
-
-- 40% claim support
-- 25% citation strength
-- 20% contradiction check
-- 15% risk severity
-
-Example scoring logic:
-
-- Supported claim: no penalty
-- Partially supported claim: minus 10
-- Unsupported claim: minus 25
-- Weak citation: minus 8
-- Contradiction found: minus 20
-- High-risk answer: minus 10
-
-The score should be easy to explain in the UI.
+Incomplete verification (agent failure) must cap confidence and flag `verification_incomplete: true`.
 
 ---
 
-### F9. Final Answer Composer
+### F7. Finding composer
 
-The system must generate a safer final answer after verification.
-
-If unsupported claims are found, the final answer should:
-
-- Remove unsupported statements
-- Add missing conditions
-- Include uncertainty where needed
-- Recommend human review for high-risk cases
+Merge micro-verifier outputs into deduplicated findings ranked by severity and confidence. Attach evidence snippets from corpus retrieval.
 
 ---
 
-### F10. User Interface
+### F8. Gap detection and suggested doc updates (Add-on A4)
 
-The UI must show:
-
-- Question input
-- Final verified answer
-- Overall confidence score
-- Risk level
-- Claim ledger
-- Citation evidence
-- Unsupported claim highlights
-- Document improvement suggestions
-- Agent timeline
-- Latency metrics
-
-The UI should avoid looking like a basic chatbot. It should feel like an enterprise trust dashboard.
+Convert verification gaps into `DocumentGap` and `SuggestedDocumentUpdate` objects. Not MVP.
 
 ---
 
-### F11. Latency Panel
+### F9. Human review store (Add-on A5)
 
-The demo UI must include visible latency metrics.
-
-Metrics:
-
-- Answer generation time
-- Claim extraction time
-- Parallel verification time
-- Total end-to-end time
-- Number of agents run
-- Number of claims checked
-- Number of citations verified
-
-Example:
-
-> 6 agents, 8 claims, 13 citations verified in 1.4 seconds.
+Local JSON or sqlite — required for architecture-fact confirm flow and PR ack overrides. Not MVP.
 
 ---
 
-### F12. Document Gap Detection
+### F10. MCP server (Add-on A3)
 
-The system should detect when verification reveals a documentation problem.
-
-Gap types:
-
-- Unsupported claim
-- Weak or missing citation
-- Contradictory source documents
-- Missing policy coverage
-- Ambiguous source language
-- Missing exception or approval condition
-
-For the MVP, this can be derived from verifier outputs rather than built as a separate complex subsystem.
+Thin wrapper over verification API. Not MVP.
 
 ---
 
-### F13. Suggested Document Update Generation
+### F11. Developer UI (MVP)
 
-The system should generate suggested document improvements when gaps are found.
+**MVP minimum:**
 
-Each suggestion should include:
+- **Verify** button (manual trigger)
+- Findings list with severity badges
+- Citation snippets
+- Agent timeline + latency panel
 
-- Gap type
-- Source document or section, if known
-- Suggested update text
-- Reason for the suggestion
-- Related question, claim, and verifier finding
-- Confidence or priority
+**Add-on UI:** save auto-refresh (A1), architecture fact queue (A5), doc suggestions (A4), RCA button (A7).
 
-Suggestions should be concise and reviewable. They should not be written back into source documents automatically.
+UI should read as an **assurance dashboard**, not a chat thread.
 
 ---
 
-### F14. Human Approval Workflow
+### F12. CI integration (Add-on)
 
-The system must treat document updates as human-reviewed actions.
-
-The MVP workflow can be simple:
-
-- Pending
-- Approved
-- Rejected
-
-The UI should make it clear that TrustLoop recommends improvements but does not autonomously change enterprise source material.
+GitHub Action (or script) invoking verify API on PR diff; post summary comment. Configurable severity threshold. Not required for MVP.
 
 ---
 
-### F15. Approved Update Tracking
-
-The system should track approved suggestions as part of the answer audit trail.
-
-For the MVP, approved updates can be stored in memory or a simple local JSON file. Future versions can connect approvals to document management systems, version control, or enterprise knowledge platforms.
-
----
-
-## 10. Non-Functional Requirements
+## 11. Non-Functional Requirements
 
 ### Performance
 
-- Verified answer should appear within a few seconds.
-- Verifier agents should run in parallel.
-- UI should show progress as agents complete.
+- Scoped save verification: target &lt; 2s end-to-end; stretch &lt; 1s.
+- PR verification: target &lt; 5s on demo repo.
+- All micro-verifiers for a request run in parallel.
 
 ### Reliability
 
-- If one verifier fails, the system should still return partial results.
-- Errors should be shown clearly.
-- The final answer should not claim high confidence if verification is incomplete.
+- Single agent failure → partial results; never silent success.
+- Errors surfaced per agent in timeline.
 
-### Security
+### Security (MVP)
 
-For production:
-
-- API keys must never be exposed client-side.
-- Uploaded documents should remain private.
-- Enterprise workspaces should be isolated.
-- User questions and answer logs should be protected.
-- Role-based access control should be supported.
-
-For the hackathon MVP:
-
-- Use a fake demo corpus.
-- Do not upload sensitive real company documents.
-- Store API keys in environment variables.
-
-### Scalability
-
-Future architecture should support:
-
-- Larger document collections
-- Multiple enterprise workspaces
-- More verifier agents
-- Integration with enterprise data sources
-- Audit log storage
+- API keys in environment variables only.
+- Demo repo and corpus are fictional; no real customer data.
 
 ### Explainability
 
-The system must explain why each claim was marked supported, partially supported, unsupported, or uncertain.
+Every finding must cite **why** and link to corpus citation IDs where applicable.
 
 ### Auditability
 
-Each answer should preserve:
-
-- User question
-- Retrieved source chunks
-- Draft answer
-- Extracted claims
-- Verifier outputs
-- Final answer
-- Confidence score
-- Latency metrics
+Per verification run, persist: trigger, diff scope, retrieved chunks, agent outputs, final findings, latency.
 
 ---
 
-## 11. Risks and Scope Controls
+## 12. Risks and Scope Controls
 
-### Risk: Scope Creep
-
-TrustLoop has a large platform vision, but the 24-hour MVP should stay focused on real-time enterprise document verification.
-
-Scope control:
-
-- Build the core RAG and verification loop first.
-- Add only a basic Document Improvement Suggestions panel for the MVP.
-- Treat full approval queues, document versioning, workflow routing, and automated corpus updates as future work.
-- Keep the coding assurance and MCP layer as a stretch direction, not part of the core demo.
-
-### Risk: Overclaiming Automation
-
-TrustLoop should not imply that it safely edits enterprise documents on its own.
-
-Scope control:
-
-- Suggested document updates are recommendations only.
-- Humans must approve, reject, or edit suggested changes.
-- Auto-editing source documents is not in the MVP.
-- Approved update tracking can be mocked or stored locally for the demo.
-
-### Risk: Verification Quality
-
-The demo depends on verifier outputs being clear and explainable.
-
-Scope control:
-
-- Use a small, well-authored demo corpus with explicit citation IDs.
-- Prefer deterministic confidence scoring for the MVP.
-- Show uncertainty honestly when evidence is weak or missing.
+| Risk | Control |
+|------|---------|
+| Scope creep into full static analysis | Deterministic graph + LLM verifiers only; no whole-program symbolic execution |
+| Noisy save-triggered warnings | Debounce, blast-radius scoping, severity tiers, acknowledge flow |
+| Architecture map hallucination | Human confirmation required before fact affects gating |
+| MCP mistaken as full product | Document runner + engine as core; MCP as one surface |
+| Cerebras API unavailable | Graceful degradation; mock verifier fixtures for frontend |
 
 ---
 
-## 12. MVP Scope
+## 13. MVP vs Add-ons
 
-### Must Have
+Built by **2 people**. Ship a working demo first; everything else is a prioritized add-on stack.
 
-The 24-hour MVP must include:
+### MVP — must ship (demo-able)
 
-- Web app
-- Preloaded enterprise demo corpus
-- RAG answer generation
-- Gemma 4 on Cerebras as primary model
-- Claim extraction
-- At least 3 verifier agents
-- Parallel agent execution
-- Claim-level verification table
-- Citation checking
-- Confidence score
-- Highlighted unsupported claims
-- Basic Document Improvement Suggestions panel
-- Latency panel
-- Polished 60-second demo
+The smallest path to the hero moment: *bad import → manual verify → finding with citations in &lt; 2s*.
 
-### Should Have
+| Area | MVP scope |
+|------|-----------|
+| **Data** | `demo_repo/` (web, api, payments) + minimal corpus: 1 ADR, 1 postmortem, `CONTRIBUTING.md` — all with citation IDs |
+| **Indexer** | Python import graph + `affected_paths` for changed file (deterministic) |
+| **Retriever** | Keyword search over corpus chunks (no vector DB required) |
+| **Agents** | **3** parallel micro-verifiers: `architecture_boundary`, `incident_pattern`, `risk` |
+| **Engine** | `POST /api/verify`, orchestrator (`asyncio.gather`), confidence scorer, finding composer |
+| **Inference** | Cerebras Gemma + **mock mode** when API key missing |
+| **UI** | Web dashboard: **Verify** button, findings list, agent timeline, citation snippets |
+| **Trigger** | Manual only (`trigger: manual`) — no file watcher yet |
+| **Demo** | Boundary violation in `checkout.py` cites `ARCH_ADR_004` + `INCIDENT_PM_2024_03` |
 
-The MVP should include:
+**MVP explicitly excludes:** MCP, save watcher, post-commit hook, CI gate, architecture-fact UI, doc suggestions panel, RCA swarm, policy Q&A.
 
-- Standard RAG vs TrustLoop comparison
-- Agent timeline animation
-- Risk level label
-- Suggested corrections
-- Suggested document updates for unsupported or ambiguous answers
-- Demo mode button
-- README with architecture and demo explanation
+### Add-ons — build after MVP (priority order)
 
-### Could Have
+| # | Add-on | Value | Effort |
+|---|--------|-------|--------|
+| A1 | **Live save trigger** (`watch-save.py`, debounced) | Hero “ambient” story | Small |
+| A2 | **Agents +2** (`convention`, `doc_drift`) → 5 verifiers | Richer findings | Medium |
+| A3 | **MCP server** (`verify_diff`, `get_findings`) | Cursor / agent integration | Medium |
+| A4 | **Doc suggestions panel** (gap detector, pending review) | Human-in-the-loop story | Medium |
+| A5 | **Architecture facts** (propose → confirm → re-verify) | Trustworthy map | Medium |
+| A6 | **Post-commit hook** + **PR verify script** | Team / CI story | Small |
+| A7 | **RCA swarm** (test-failure button, parallel hypotheses) | Wow factor | Medium |
+| A8 | **Policy Q&A** (`POST /api/ask`, claim verification) | Second demo mode | Large |
+| A9 | IDE extension packaging, audit JSON export, nightly scan | Polish / stretch | Variable |
 
-The MVP could include:
+Pick add-ons top-down only after MVP demo runs twice without failure.
 
-- PDF upload
-- Multimodal document input
-- Exportable audit report
-- Baseline comparison against slower provider
-- Human review flag
-- Simple approve/reject controls for document suggestions
-- Slack-style output view
+### Will not have (any phase in hackathon)
 
-### Will Not Have
-
-The MVP will not include:
-
-- Full authentication
-- Enterprise permissions
-- Full multi-tenant architecture
-- SOC2-grade audit logging
-- Complex admin dashboard
-- Production-grade document ingestion pipeline
-- Automatic editing of source documents
-- Full self-learning document automation
-- Codebase architecture mapping or MCP developer integration
-
----
-
-## 13. Stretch Goals
-
-### Stretch Goal 1: Multimodal Verification
-
-Allow users to upload screenshots, scanned policy pages, diagrams, or architecture images.
-
-Example question:
-
-> “Does this architecture diagram comply with our data retention policy?”
-
-Gemma 4 can analyze image inputs, and TrustLoop can verify the answer against text policies.
-
-### Stretch Goal 2: Skeptic Agent
-
-Add an adversarial verifier that tries to disprove the answer.
-
-The Skeptic Agent asks:
-
-- What would make this answer wrong?
-- Is there a hidden exception?
-- Is the answer overconfident?
-- Is the citation misleading?
-- Is there a policy contradiction?
-
-This makes the product feel more novel than a normal RAG chatbot.
-
-### Stretch Goal 3: Audit Report Export
-
-Generate a downloadable audit report containing:
-
-- User question
-- Final answer
-- Confidence score
-- Risk level
-- Claim ledger
-- Citations
-- Verifier notes
-- Latency metrics
-
-### Stretch Goal 4: Speed Race Mode
-
-Show TrustLoop running full multi-agent verification faster than a baseline model can generate one unverified answer.
-
-This directly supports the inference speed demo angle.
-
-### Stretch Goal 5: Enterprise Risk Routing
-
-Automatically route high-risk answers to human review.
-
-Example:
-
-- Low risk: answer directly
-- Medium risk: answer with caution
-- High risk: answer plus “requires human approval”
-
----
-
-### Stretch Goal 6: Coding Assurance / MCP Layer
-
-Extend TrustLoop beyond policy documents into developer workflows.
-
-Future workflow:
-
-1. Connect TrustLoop to a repository.
-2. Map files, services, APIs, dependencies, and ownership.
-3. Read architecture docs, implementation notes, and requirements.
-4. Answer architecture questions with citations to code and docs.
-5. Verify whether implementation matches expected architecture.
-6. Flag risky code changes before review.
-7. Suggest documentation updates for human approval.
-8. Expose TrustLoop as an assurance layer inside Cursor, Claude Code, or MCP-compatible developer workflows.
-
-This is a future use case, not a dependency for the hackathon MVP.
+- Auto-fix code or auto-edit ADRs
+- Multi-tenant auth
+- Production GitHub App / OAuth
+- Full semantic code search at scale
+- SOC2 audit logging
 
 ---
 
 ## 14. Demo Use Case
 
-### Demo Company
+### Setup
 
-Northstar Bank, a fictional fintech company.
+Northstar Bank monorepo: `web`, `api`, `payments` packages. ADR-004 forbids `web` → `payments` direct imports. Postmortem `INCIDENT_PM_2024_03` describes outage from boundary violation.
 
-### Demo Documents
+### Hero demo flow (60 seconds)
 
-1. Data Handling Policy
-2. Vendor Risk Policy
-3. Customer Support Playbook
-4. Data Retention Policy
-5. AI Usage Policy
+**MVP script:**
 
-### Demo Question
+1. Open dashboard → click **Verify** on clean `checkout.py` → no high findings.
+2. Add `from payments.client import charge_customer` to `checkout.py`.
+3. Click **Verify** again → within ~2s: **High** boundary finding cites `ARCH_ADR_004` + `INCIDENT_PM_2024_03`.
+4. Agent timeline shows **3** micro-verifiers finishing in parallel.
 
-> “Can our support team upload customer financial documents into a third-party analytics tool for churn analysis?”
+**With add-ons (layer on when built):**
 
-### Intended Standard RAG Answer
+5. (A1) Save file → finding appears without clicking Verify.
+6. (A4) Doc suggestion panel → `pending_review`.
+7. (A6) PR verify script → same finding in CI summary.
 
-> “Yes, customer financial documents can be uploaded to approved third-party analytics tools.”
+### Contrast moment
 
-### Problem With Standard Answer
-
-This answer is incomplete because it misses:
-
-- Vendor approval requirement
-- Encryption requirement
-- Raw customer identifier removal
-- Retention limits
-- Compliance review for sensitive documents
-
-### Intended TrustLoop Answer
-
-> “Yes, but only if the third-party analytics tool is approved by Vendor Risk, the documents are encrypted, raw customer identifiers are removed, and the data is deleted within the approved retention window. Because this involves customer financial documents, the workflow should be treated as medium-risk and reviewed against the company’s data handling policy.”
-
-### Demo Output
-
-TrustLoop should show:
-
-- Confidence: 87%
-- Risk: Medium
-- Claims checked: 8
-- Citations verified: 13
-- Agents run: 6
-- Total latency: approximately 1–3 seconds
-- Unsupported claim caught: “Any approved analytics tool may be used.”
-- Suggested correction: “Only approved tools meeting encryption, retention, and de-identification requirements may be used.”
-- Document improvement suggestion: “Clarify that analytics tool approval also requires encryption, retention, and de-identification controls.”
+> “A knowledge MCP retrieves ADR-004 when you ask. TrustLoop verified your edit before you committed.”
 
 ---
 
 ## 15. Success Metrics
 
-### Hackathon Success Metrics
+### Hackathon
 
-- Judges understand product value within 15 seconds
-- Demo clearly shows multiple agents running in parallel
-- Unsupported claim is caught visibly
-- Verified answer appears quickly
-- Cerebras speed is shown as core to the product
-- Product feels enterprise-ready, not like a generic chatbot
+- Judges understand ambient verification in &lt; 15 seconds
+- Live violation demo feels instant
+- Parallel agent fan-out is visible
+- At least one finding tied to incident/postmortem corpus
+- Clear differentiation from retrieve-only MCP
 
-### Product Metrics
+### Product (future)
 
-- Percentage of claims verified
-- Percentage of unsupported claims caught
-- Average verified-answer latency
-- User trust score
-- Manual review time saved
-- Number of high-risk answers flagged
-- Citation accuracy rate
-- Number of documentation gaps surfaced
-- Number of suggested updates approved by reviewers
+- Mean time to detect boundary violation (editor vs PR)
+- % findings acknowledged vs ignored
+- Doc drift findings → approved ADR updates
+- Verification runs per developer per day (frequency metric enabled by Cerebras)
 
 ---
 
 ## 16. Positioning
 
-### One-Liner
+### One-liner
 
-TrustLoop is a real-time verification and assurance layer for enterprise knowledge.
+TrustLoop is ambient code assurance — parallel Gemma verifiers on Cerebras that check every change against your architecture, conventions, and engineering history.
 
-### Short Pitch
+### Short pitch
 
-TrustLoop is a self-verifying enterprise AI assistant powered by Gemma 4 on Cerebras. It answers questions from company documents, extracts every factual claim, verifies citations with parallel agents, flags unsupported statements, suggests human-approved document improvements, and returns a confidence score in real time.
+Enterprise knowledge tools retrieve answers. TrustLoop verifies code continuously: scoped diffs, parallel micro-agents, citation-backed findings, and a human-confirmed architecture map — fast enough to run on save, not just on PR.
 
-### Hackathon Pitch
+---
 
-Enterprise AI is not blocked by answers. It is blocked by trust.
+## 17. Build Plan — 2 People (MVP → Add-ons)
 
-TrustLoop uses Cerebras-speed Gemma 4 agents to verify every answer before the user sees it. In seconds, it generates an answer, checks claims, validates citations, detects hallucinations, assesses risk, and produces an audit trail.
+**Team:** 2 builders. **Rule:** nothing in the add-on list starts until MVP demo passes twice.
 
-This turns RAG from a chatbot into a trusted enterprise decision system and creates a practical loop for reducing documentation decay.
+Suggested split:
+
+| | **Person A — Engine** | **Person B — Product surface** |
+|--|------------------------|--------------------------------|
+| Owns | Backend, agents, indexer, retriever, API, Cerebras, mock mode | Frontend, demo repo, corpus, fixtures, demo script |
+| Sync points | Defines `VerificationRun` JSON first (hour 1) | Builds UI against fixture immediately |
+| Integration | Wires real `/api/verify` | Connects UI + runs demo script |
+
+Rough timeboxes assume a **24-hour hackathon** (~12h productive each). Adjust proportionally.
+
+---
+
+### Phase 0 — Unblock (both, ~2 hours)
+
+| Person A | Person B |
+|----------|----------|
+| Pydantic models + `fixtures/verification_run_violation.json` | Same fixture → UI types |
+| FastAPI skeleton + mock `POST /api/verify` returns fixture | Dashboard layout: findings, timeline, citations (static) |
+| `.env.example`, `pyproject.toml` | `demo_repo/` skeleton + `engineering_corpus/` (ADR + postmortem) |
+
+**Done when:** UI renders violation fixture; API returns it on POST.
+
+---
+
+### Phase 1 — MVP core (~8 hours)
+
+| Person A | Person B |
+|----------|----------|
+| Import graph indexer + keyword retriever | Wire **Verify** button → API |
+| Cerebras client + mock fallback | Show changed file path + diff summary in UI |
+| 3 agents: `architecture_boundary`, `incident_pattern`, `risk` | Finding cards: severity, confidence, citations |
+| Orchestrator + confidence + composer | Agent timeline + latency panel |
+| Real `POST /api/verify` replaces mock | Seed `checkout.py` clean + violation versions |
+
+**Done when:** Click Verify on bad import → real Cerebras (or mock) finding in &lt; 2s with 3 agents in timeline.
+
+---
+
+### Phase 2 — MVP harden (~2 hours, both)
+
+| Task | Owner |
+|------|-------|
+| `DEMO_SCRIPT.md` + reset script | B |
+| Error states (agent failure, no API key) | A |
+| Empty state (clean verify) + one UI polish pass | B |
+| End-to-end smoke test twice | Both |
+
+**Done when:** MVP demo is judge-ready. **Stop and reassess** before add-ons.
+
+---
+
+### Phase 3+ — Add-ons (pick by priority, ~2–4h each)
+
+Work in parallel where possible; each add-on should not break MVP demo.
+
+| Add-on | Person A | Person B |
+|--------|----------|----------|
+| **A1** Save trigger | `watch-save.py` → POST verify | UI auto-refresh on new run |
+| **A2** +2 agents | `convention`, `doc_drift` agents + orchestrator | Timeline shows 5 agents |
+| **A3** MCP | `backend/mcp/server.py` tools | — |
+| **A4** Doc suggestions | `gap_detector`, `suggestion_generator` | Suggestions panel |
+| **A5** Arch facts | `fact_proposer`, `review_store` | Confirm/reject UI |
+| **A6** Git/CI | `post-commit-verify.sh`, `verify-pr.sh` | PR summary in README |
+| **A7** RCA swarm | `rca_swarm.py` + endpoint | “Simulate test failure” button |
+| **A8** Policy Q&A | `/api/ask` + claim agents | Optional second tab |
+
+### Dependency graph (2-person)
+
+```txt
+Phase 0:  A: models + mock API  ||  B: UI + demo_repo + corpus
+              \                    /
+               v                  v
+Phase 1:  A: indexer → agents → orchestrator
+          B: UI wired → findings + timeline
+              \                    /
+               v                  v
+Phase 2:  MVP demo frozen ──────────────────► then add-ons A1→A9
+```
+
+### If you fall behind
+
+Cut in this order (keep MVP):
+
+1. Drop add-ons entirely — ship MVP only
+2. Mock mode only at demo (no live Cerebras)
+3. 2 agents instead of 3 (`architecture_boundary` + `incident_pattern` only)
+4. Simplest UI (single page, no polish)
+
+---
+
+## 18. Appendix: Policy Q&A Mode (optional demo module)
+
+The original TrustLoop policy Q&A flow (question → answer → claim verification) remains a **valid secondary demo** using the same engine:
+
+- `POST /api/ask` — natural language question over engineering + policy corpus
+- Claim extraction + parallel verifiers on **answer claims** instead of **code diffs**
+
+This module reuses: retriever, Cerebras parallel pattern, confidence aggregator, citation UI. **Add-on A8** — only after MVP is frozen.
+
+---
+
+## 19. Related Documents
+
+- `docs/ARCHITECTURE.md` — component contracts, prompts, folder structure (update in sync with this PRD)
+- `docs/DEMO_SCRIPT.md` — authored in MVP Phase 2
+- `CLAUDE.md` — implementation guardrails for agents
