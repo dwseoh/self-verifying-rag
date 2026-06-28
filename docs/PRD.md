@@ -16,11 +16,12 @@ The user receives:
 - Claim-by-claim verification
 - Highlighted unsupported or uncertain claims
 - Suggested corrections
+- Suggested document improvements for human review
 - Latency metrics showing how fast verification completed
 
 The core technical insight is that enterprise verification is usually too slow to happen live. Cerebras ultra-fast inference makes it possible to run several Gemma 4 verifier agents in parallel with almost no noticeable delay.
 
-TrustLoop is not just a faster chatbot. It is a real-time trust layer for enterprise AI.
+TrustLoop is not just a faster chatbot. It is a real-time verification and assurance layer for enterprise knowledge.
 
 ---
 
@@ -111,9 +112,33 @@ In the future, TrustLoop could integrate with:
 
 Instead of replacing existing enterprise knowledge systems, TrustLoop sits on top of them and makes AI answers more trustworthy.
 
+Over time, TrustLoop should also help enterprises reduce documentation decay. When the system finds unsupported claims, weak citations, contradictions, missing policy coverage, or ambiguous source language, it can turn those verification findings into suggested document improvements for a human reviewer.
+
+The product vision is not autonomous document editing. TrustLoop proposes improvements, humans approve them, and approved changes make the knowledge base stronger for future answers.
+
 ---
 
-## 5. Value Proposition
+## 5. Self-Learning Documentation Loop
+
+TrustLoop creates a human-in-the-loop improvement cycle for enterprise knowledge bases.
+
+The core loop:
+
+1. User asks a question.
+2. TrustLoop retrieves documents, answers, and verifies the answer.
+3. Verifier agents detect gaps, ambiguity, weak citations, unsupported claims, or contradictions.
+4. TrustLoop generates suggested document improvements.
+5. A human reviewer approves, rejects, or edits each suggestion.
+6. Approved changes improve the document corpus.
+7. Future answers become more accurate, better cited, and easier to trust.
+
+For the 24-hour MVP, this should appear as a lightweight **Document Improvement Suggestions** panel. The panel can show a small number of suggested updates, the evidence that triggered them, and a review status. It does not need to update source documents automatically.
+
+This makes TrustLoop feel larger than answer verification without overbuilding the hackathon product. The MVP proves the loop by showing that every verification failure can become a concrete improvement opportunity.
+
+---
+
+## 6. Value Proposition
 
 ### For Employees
 
@@ -127,6 +152,7 @@ Users can:
 - Identify uncertain claims immediately
 - Avoid manually checking every document
 - Make better decisions faster
+- Surface documentation gaps that need human attention
 
 ### For Enterprises
 
@@ -140,6 +166,7 @@ Enterprises benefit from:
 - Faster knowledge retrieval
 - Safer compliance workflows
 - More trustworthy internal AI adoption
+- Reduced documentation decay through human-approved improvements
 
 ### For the Hackathon
 
@@ -160,7 +187,7 @@ On slower inference, this multi-agent verification loop would feel too slow. Wit
 
 ---
 
-## 6. Why Latency Matters
+## 7. Why Latency Matters
 
 Most enterprise AI assistants follow a simple flow:
 
@@ -193,7 +220,7 @@ The key demo message:
 
 ---
 
-## 7. User Stories
+## 8. User Stories
 
 ### User Story 1: Ask an Enterprise Question
 
@@ -287,7 +314,37 @@ Acceptance criteria:
 
 ---
 
-## 8. Functional Requirements
+### User Story 8: Review Suggested Document Improvements
+
+As a knowledge manager, I want to review suggested document improvements so that gaps found during verification can become safer, clearer source material.
+
+Acceptance criteria:
+
+- System identifies documentation gaps, ambiguous source language, weak citations, or contradictions.
+- System generates suggested document updates with supporting evidence.
+- Suggested updates are shown as pending human review.
+- Reviewer can approve, reject, or mark a suggestion for editing.
+- Approved suggestions are tracked in the audit trail.
+
+---
+
+### User Story 9: Check Codebase Documentation Against Implementation
+
+As an engineering lead, I want TrustLoop to compare codebase documentation with implementation so that architecture docs and requirements do not drift from reality.
+
+Acceptance criteria:
+
+- System can connect to a repository in a future workflow.
+- System maps files, services, APIs, dependencies, and ownership.
+- System answers architecture questions using docs and code context.
+- System flags when implementation appears inconsistent with documentation or requirements.
+- System suggests documentation updates for human review.
+
+This is a stretch or future platform use case, not a requirement for the 24-hour MVP.
+
+---
+
+## 9. Functional Requirements
 
 ### F1. Document Corpus
 
@@ -493,6 +550,7 @@ The UI must show:
 - Claim ledger
 - Citation evidence
 - Unsupported claim highlights
+- Document improvement suggestions
 - Agent timeline
 - Latency metrics
 
@@ -520,7 +578,63 @@ Example:
 
 ---
 
-## 9. Non-Functional Requirements
+### F12. Document Gap Detection
+
+The system should detect when verification reveals a documentation problem.
+
+Gap types:
+
+- Unsupported claim
+- Weak or missing citation
+- Contradictory source documents
+- Missing policy coverage
+- Ambiguous source language
+- Missing exception or approval condition
+
+For the MVP, this can be derived from verifier outputs rather than built as a separate complex subsystem.
+
+---
+
+### F13. Suggested Document Update Generation
+
+The system should generate suggested document improvements when gaps are found.
+
+Each suggestion should include:
+
+- Gap type
+- Source document or section, if known
+- Suggested update text
+- Reason for the suggestion
+- Related question, claim, and verifier finding
+- Confidence or priority
+
+Suggestions should be concise and reviewable. They should not be written back into source documents automatically.
+
+---
+
+### F14. Human Approval Workflow
+
+The system must treat document updates as human-reviewed actions.
+
+The MVP workflow can be simple:
+
+- Pending
+- Approved
+- Rejected
+
+The UI should make it clear that TrustLoop recommends improvements but does not autonomously change enterprise source material.
+
+---
+
+### F15. Approved Update Tracking
+
+The system should track approved suggestions as part of the answer audit trail.
+
+For the MVP, approved updates can be stored in memory or a simple local JSON file. Future versions can connect approvals to document management systems, version control, or enterprise knowledge platforms.
+
+---
+
+## 10. Non-Functional Requirements
 
 ### Performance
 
@@ -579,7 +693,43 @@ Each answer should preserve:
 
 ---
 
-## 10. MVP Scope
+## 11. Risks and Scope Controls
+
+### Risk: Scope Creep
+
+TrustLoop has a large platform vision, but the 24-hour MVP should stay focused on real-time enterprise document verification.
+
+Scope control:
+
+- Build the core RAG and verification loop first.
+- Add only a basic Document Improvement Suggestions panel for the MVP.
+- Treat full approval queues, document versioning, workflow routing, and automated corpus updates as future work.
+- Keep the coding assurance and MCP layer as a stretch direction, not part of the core demo.
+
+### Risk: Overclaiming Automation
+
+TrustLoop should not imply that it safely edits enterprise documents on its own.
+
+Scope control:
+
+- Suggested document updates are recommendations only.
+- Humans must approve, reject, or edit suggested changes.
+- Auto-editing source documents is not in the MVP.
+- Approved update tracking can be mocked or stored locally for the demo.
+
+### Risk: Verification Quality
+
+The demo depends on verifier outputs being clear and explainable.
+
+Scope control:
+
+- Use a small, well-authored demo corpus with explicit citation IDs.
+- Prefer deterministic confidence scoring for the MVP.
+- Show uncertainty honestly when evidence is weak or missing.
+
+---
+
+## 12. MVP Scope
 
 ### Must Have
 
@@ -596,6 +746,7 @@ The 24-hour MVP must include:
 - Citation checking
 - Confidence score
 - Highlighted unsupported claims
+- Basic Document Improvement Suggestions panel
 - Latency panel
 - Polished 60-second demo
 
@@ -607,6 +758,7 @@ The MVP should include:
 - Agent timeline animation
 - Risk level label
 - Suggested corrections
+- Suggested document updates for unsupported or ambiguous answers
 - Demo mode button
 - README with architecture and demo explanation
 
@@ -619,6 +771,7 @@ The MVP could include:
 - Exportable audit report
 - Baseline comparison against slower provider
 - Human review flag
+- Simple approve/reject controls for document suggestions
 - Slack-style output view
 
 ### Will Not Have
@@ -631,10 +784,13 @@ The MVP will not include:
 - SOC2-grade audit logging
 - Complex admin dashboard
 - Production-grade document ingestion pipeline
+- Automatic editing of source documents
+- Full self-learning document automation
+- Codebase architecture mapping or MCP developer integration
 
 ---
 
-## 11. Stretch Goals
+## 13. Stretch Goals
 
 ### Stretch Goal 1: Multimodal Verification
 
@@ -691,7 +847,26 @@ Example:
 
 ---
 
-## 12. Demo Use Case
+### Stretch Goal 6: Coding Assurance / MCP Layer
+
+Extend TrustLoop beyond policy documents into developer workflows.
+
+Future workflow:
+
+1. Connect TrustLoop to a repository.
+2. Map files, services, APIs, dependencies, and ownership.
+3. Read architecture docs, implementation notes, and requirements.
+4. Answer architecture questions with citations to code and docs.
+5. Verify whether implementation matches expected architecture.
+6. Flag risky code changes before review.
+7. Suggest documentation updates for human approval.
+8. Expose TrustLoop as an assurance layer inside Cursor, Claude Code, or MCP-compatible developer workflows.
+
+This is a future use case, not a dependency for the hackathon MVP.
+
+---
+
+## 14. Demo Use Case
 
 ### Demo Company
 
@@ -739,10 +914,11 @@ TrustLoop should show:
 - Total latency: approximately 1–3 seconds
 - Unsupported claim caught: “Any approved analytics tool may be used.”
 - Suggested correction: “Only approved tools meeting encryption, retention, and de-identification requirements may be used.”
+- Document improvement suggestion: “Clarify that analytics tool approval also requires encryption, retention, and de-identification controls.”
 
 ---
 
-## 13. Success Metrics
+## 15. Success Metrics
 
 ### Hackathon Success Metrics
 
@@ -762,18 +938,20 @@ TrustLoop should show:
 - Manual review time saved
 - Number of high-risk answers flagged
 - Citation accuracy rate
+- Number of documentation gaps surfaced
+- Number of suggested updates approved by reviewers
 
 ---
 
-## 14. Positioning
+## 16. Positioning
 
 ### One-Liner
 
-TrustLoop gives enterprises real-time AI answers with claim-level proof, citation verification, and confidence scoring.
+TrustLoop is a real-time verification and assurance layer for enterprise knowledge.
 
 ### Short Pitch
 
-TrustLoop is a self-verifying enterprise AI assistant powered by Gemma 4 on Cerebras. It answers questions from company documents, extracts every factual claim, verifies citations with parallel agents, flags unsupported statements, and returns a confidence score in real time.
+TrustLoop is a self-verifying enterprise AI assistant powered by Gemma 4 on Cerebras. It answers questions from company documents, extracts every factual claim, verifies citations with parallel agents, flags unsupported statements, suggests human-approved document improvements, and returns a confidence score in real time.
 
 ### Hackathon Pitch
 
@@ -781,4 +959,4 @@ Enterprise AI is not blocked by answers. It is blocked by trust.
 
 TrustLoop uses Cerebras-speed Gemma 4 agents to verify every answer before the user sees it. In seconds, it generates an answer, checks claims, validates citations, detects hallucinations, assesses risk, and produces an audit trail.
 
-This turns RAG from a chatbot into a trusted enterprise decision system.
+This turns RAG from a chatbot into a trusted enterprise decision system and creates a practical loop for reducing documentation decay.

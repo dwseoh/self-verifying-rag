@@ -63,6 +63,12 @@ Agent         Agent
                          |
                          v
               Verified Answer UI
+                         |
+                         v
+        Document Improvement Suggestions
+                         |
+                         v
+              Human Reviewer Approval
 ```
 
 ---
@@ -81,6 +87,7 @@ Main UI sections:
 - Risk badge
 - Claim ledger
 - Citation viewer
+- Document improvement suggestions
 - Agent timeline
 - Latency metrics
 
@@ -105,6 +112,8 @@ The backend owns:
 - LLM calls
 - Parallel agent orchestration
 - Confidence scoring
+- Document gap detection
+- Suggested document update generation
 - Final response composition
 - Latency tracking
 
@@ -137,6 +146,8 @@ Response:
   "risk_level": "medium",
   "claims": [],
   "citations": [],
+  "document_gaps": [],
+  "suggested_document_updates": [],
   "latency": {
     "generation_ms": 420,
     "claim_extraction_ms": 180,
@@ -488,9 +499,73 @@ It should:
 
 ---
 
-## 6. Data Contracts
+## 6. Human-in-the-Loop Learning Layer
 
-### 6.1 Claim Object
+The Human-in-the-Loop Learning Layer turns verification failures into reviewable document improvement suggestions.
+
+For the 24-hour MVP, this layer should be lightweight. It should show a small panel of suggested improvements, explain why each suggestion was generated, and make clear that no source document is updated automatically.
+
+Future versions can connect approved updates to a document management system, version control workflow, or enterprise knowledge base.
+
+### 6.1 Learning Flow
+
+```txt
+Answer Verification
+        |
+        v
+Gap Detection
+        |
+        v
+Suggested Document Update
+        |
+        v
+Human Review
+        |
+        v
+Approved Knowledge Base Update
+```
+
+### 6.2 Gap Detection Inputs
+
+The gap detector can consume outputs from the existing verifier agents.
+
+Example triggers:
+
+- Unsupported claim
+- Weak or missing citation
+- Contradiction between documents
+- Missing policy coverage
+- Ambiguous source text
+- Missing exception, approval path, or risk condition
+
+### 6.3 MVP Behavior
+
+The MVP does not need a full workflow engine.
+
+Recommended behavior:
+
+- Generate 1-3 suggested document improvements from verifier findings.
+- Display each suggestion in the UI with source evidence.
+- Mark each suggestion as pending review.
+- Optionally support simple approve/reject buttons backed by local state.
+- Include approved or rejected suggestions in the audit trail.
+
+### 6.4 Non-MVP Behavior
+
+The MVP should not:
+
+- Automatically edit source documents
+- Sync approved changes into production systems
+- Implement full document versioning
+- Implement enterprise approval routing
+
+---
+
+## 7. Data Contracts
+
+Parallel agents require clear data contracts so different team members can build modules independently and mount them together at the API boundary. Each agent should accept and return predictable JSON, even if the implementation behind it changes during the hackathon.
+
+### 7.1 Claim Object
 
 ```json
 {
@@ -508,7 +583,7 @@ It should:
 
 ---
 
-### 6.2 Final Response Object
+### 7.2 Final Response Object
 
 ```json
 {
@@ -523,13 +598,67 @@ It should:
     "claim_extraction_ms": 180,
     "parallel_verification_ms": 610,
     "total_ms": 1450
-  }
+  },
+  "document_gaps": [],
+  "suggested_document_updates": []
 }
 ```
 
 ---
 
-## 7. UI Architecture
+### 7.3 DocumentGap
+
+```json
+{
+  "id": "gap_1",
+  "type": "missing_policy_coverage",
+  "severity": "medium",
+  "related_claim_id": "claim_3",
+  "question": "Can support upload customer financial documents into a third-party analytics tool?",
+  "source_citations": ["DATA_POLICY_3.2", "VENDOR_POLICY_1.4"],
+  "description": "The retrieved policies explain encryption and vendor approval but do not clearly state whether churn analysis is an allowed purpose.",
+  "detected_by": ["skeptic_agent", "factual_support_agent"],
+  "confidence": 0.78
+}
+```
+
+---
+
+### 7.4 SuggestedDocumentUpdate
+
+```json
+{
+  "id": "suggestion_1",
+  "gap_id": "gap_1",
+  "target_document": "Customer Support Playbook",
+  "target_section": "Third-Party Analytics Requests",
+  "suggested_text": "Clarify that customer financial documents may be used for churn analysis only when the analytics vendor is approved, encryption is enabled, raw customer identifiers are removed, and retention limits are followed.",
+  "reason": "Verification found that the answer required conditions spread across multiple policies, but the support playbook does not state the complete workflow.",
+  "status": "pending_review",
+  "priority": "medium",
+  "created_from_answer_id": "answer_123"
+}
+```
+
+---
+
+### 7.5 HumanReviewDecision
+
+```json
+{
+  "id": "review_1",
+  "suggested_update_id": "suggestion_1",
+  "decision": "approved",
+  "reviewer": "knowledge_manager_demo",
+  "reviewed_at": "2026-06-28T15:30:00Z",
+  "review_notes": "Approved for demo corpus update.",
+  "approved_text": "Customer financial documents may be used for churn analysis only when the analytics vendor is approved, encryption is enabled, raw customer identifiers are removed, and retention limits are followed."
+}
+```
+
+---
+
+## 8. UI Architecture
 
 Recommended page layout:
 
@@ -555,6 +684,11 @@ Recommended page layout:
 | Raw IDs may be uploaded     Unsupported   No citation       |
 | Retention limit applies     Supported     Retention Policy  |
  -------------------------------------------------------------
+| DOCUMENT IMPROVEMENT SUGGESTIONS                            |
+| Gap: Support playbook does not state analytics conditions    |
+| Suggestion: Add approval, encryption, de-ID, retention rules |
+| Status: Pending human review                                |
+ -------------------------------------------------------------
 | LATENCY                                                     |
 | 6 agents | 8 claims checked | 13 citations verified | 1.4s |
  -------------------------------------------------------------
@@ -562,7 +696,7 @@ Recommended page layout:
 
 ---
 
-## 8. Recommended Folder Structure
+## 9. Recommended Folder Structure
 
 ```txt
 trustloop/
@@ -583,6 +717,10 @@ trustloop/
 │   │   ├── contradiction_agent.py
 │   │   ├── skeptic_agent.py
 │   │   └── risk_agent.py
+│   ├── improvement/
+│   │   ├── gap_detector.py
+│   │   ├── suggestion_generator.py
+│   │   └── review_store.py
 │   ├── retrieval/
 │   │   ├── loader.py
 │   │   ├── chunker.py
@@ -593,3 +731,116 @@ trustloop/
 │   └── demo_corpus/
 └── scripts/
 ```
+
+---
+
+## 10. Future MCP / Coding Assurance Architecture
+
+This section is future architecture and stretch direction. It is not required for the 24-hour MVP.
+
+The same TrustLoop pattern can extend from enterprise policy documents to codebases. In that mode, TrustLoop acts as an assurance layer for engineering workflows: it maps the repository, reads architecture documentation, answers implementation questions, verifies code changes against requirements, and suggests documentation updates for human review.
+
+### 10.1 Future System Diagram
+
+```txt
+Repository Connection
+        |
+        v
+Codebase Parser
+        |
+        v
+Architecture Mapper
+        |
+        +--------------------+
+        |                    |
+        v                    v
+Dependency Graph      Documentation Index
+        |                    |
+        +----------+---------+
+                   |
+                   v
+          Documentation Matcher
+                   |
+                   v
+          Code-Change Verifier
+                   |
+                   v
+            MCP Tool Interface
+                   |
+                   v
+Cursor / Claude Code / MCP-Compatible Workflow
+```
+
+### 10.2 Future Components
+
+- **Codebase Parser:** Reads repository files, module boundaries, service definitions, API surfaces, and configuration.
+- **Architecture Mapper:** Builds a structured view of services, ownership, data flow, and major dependencies.
+- **Dependency Graph:** Tracks imports, package dependencies, service calls, and related files.
+- **Documentation Matcher:** Compares implementation against README files, architecture docs, requirements, and runbooks.
+- **Code-Change Verifier:** Reviews diffs or pull requests to flag changes that may violate expected architecture, policy, or requirements.
+- **MCP Tool Interface:** Exposes TrustLoop checks inside developer tools such as Cursor, Claude Code, or other MCP-compatible workflows.
+
+### 10.3 Future Workflow
+
+1. Connect to a repository.
+2. Map files, services, APIs, dependencies, and ownership.
+3. Answer architecture questions with citations to docs and code.
+4. Verify whether implementation matches documentation.
+5. Flag risky code changes.
+6. Suggest documentation updates.
+7. Send suggestions to human review before any document changes are applied.
+
+---
+
+## 11. Parallel Development Plan
+
+The architecture is intentionally modular so the team can work in parallel during the hackathon.
+
+### RAG + Retrieval
+
+Owner focus:
+
+- Build the demo corpus loader.
+- Add chunking and citation IDs.
+- Implement vector or keyword retrieval.
+- Return consistent chunk objects to the answer agent.
+
+### Verifier Agents
+
+Owner focus:
+
+- Implement factual support, citation match, contradiction, skeptic, and risk agents.
+- Keep each agent behind a stable JSON input/output contract.
+- Return partial results if one agent fails.
+
+### Frontend Dashboard
+
+Owner focus:
+
+- Build the question input, verified answer panel, confidence score, claim ledger, citation viewer, agent timeline, latency panel, and document improvement suggestions panel.
+- Make the UI feel like an enterprise verification dashboard, not a generic chatbot.
+
+### Data Contracts
+
+Owner focus:
+
+- Define shared TypeScript or Python models for claims, citations, verifier results, document gaps, suggested updates, review decisions, and final responses.
+- Keep sample JSON fixtures available for frontend and backend work before the full pipeline is connected.
+
+### Document Improvement Suggestions
+
+Owner focus:
+
+- Convert verifier findings into `DocumentGap` objects.
+- Generate `SuggestedDocumentUpdate` objects.
+- Store review decisions locally for the demo.
+- Make clear that human approval is required.
+
+### Demo Polish
+
+Owner focus:
+
+- Prepare the Northstar Bank scenario.
+- Add seeded examples for standard RAG versus TrustLoop.
+- Ensure latency metrics and parallel agent activity are visible.
+- Keep the story focused on real-time verification plus a credible documentation improvement loop.
