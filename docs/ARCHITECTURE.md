@@ -924,6 +924,8 @@ Claim object (Q&A mode only):
 
 ## 14. Related Documents
 
-- `docs/PRD.md` — requirements, triggers, MVP scope, sprint plan
-- `docs/DEMO_SCRIPT.md` — judge demo script (Sprint 5)
-- `CLAUDE.md` — implementation guardrails
+- `docs/PRD.md` — requirements, add-ons, phases
+- `docs/IMPLEMENTATION.md` — MVP execution guide (2 people)
+- `docs/CEREBRAS_GEMMA.md` — LLM API for agents
+- `docs/DEMO_SCRIPT.md` — judge demo
+- `CLAUDE.md` — guardrails

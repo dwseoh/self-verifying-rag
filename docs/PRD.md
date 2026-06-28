@@ -727,6 +727,8 @@ This module reuses: retriever, Cerebras parallel pattern, confidence aggregator,
 
 ## 19. Related Documents
 
-- `docs/ARCHITECTURE.md` — component contracts, prompts, folder structure (update in sync with this PRD)
-- `docs/DEMO_SCRIPT.md` — authored in MVP Phase 2
+- `docs/IMPLEMENTATION.md` — **MVP scope, phases, 2-person split, database decision**
+- `docs/CEREBRAS_GEMMA.md` — Gemma on Cerebras API reference
+- `docs/ARCHITECTURE.md` — component contracts, prompts, folder structure
+- `docs/DEMO_SCRIPT.md` — judge demo steps
 - `CLAUDE.md` — implementation guardrails for agents

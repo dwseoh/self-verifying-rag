@@ -2,3 +2,28 @@
 CLAUDE.md
 MEMORY.md
 
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+
+# Node (frontend)
+node_modules/
+frontend/.next/
+frontend/dist/
+
+# Local state (MVP JSON store — not secrets)
+data/store/*.json
+data/store/*.jsonl
+!data/store/.gitkeep
+
+# IDE
+.idea/
+.vscode/
+*.swp
+.DS_Store

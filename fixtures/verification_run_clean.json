@@ -1,0 +1,38 @@
+{
+  "id": "run_clean_demo",
+  "trigger": "manual",
+  "repo_path": "data/demo_repo",
+  "base_ref": "main",
+  "head_ref": "HEAD",
+  "changed_paths": ["apps/web/checkout.py"],
+  "findings": [],
+  "risk_level": "low",
+  "overall_confidence": 100,
+  "verification_incomplete": false,
+  "agent_timeline": [
+    {"agent": "architecture_boundary", "status": "ok", "latency_ms": 48},
+    {"agent": "incident_pattern", "status": "ok", "latency_ms": 45},
+    {"agent": "risk", "status": "ok", "latency_ms": 42}
+  ],
+  "retrieved_chunks": [
+    {
+      "citation_id": "ARCH_ADR_004",
+      "document_title": "Arch Adr 004 Service Boundaries",
+      "section_title": "Service Boundary Rules",
+      "text": "The web application must not import from the packages/payments package directly.",
+      "score": 0.85
+    }
+  ],
+  "latency": {
+    "indexing_ms": 12,
+    "retrieval_ms": 8,
+    "parallel_verification_ms": 48,
+    "composition_ms": 3,
+    "total_ms": 71
+  },
+  "metadata": {
+    "files_checked": 2,
+    "citations_consulted": 3,
+    "agents_run": 3
+  }
+}

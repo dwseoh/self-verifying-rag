@@ -1,0 +1,12 @@
+{
+  "findings": [
+    {
+      "severity": "high",
+      "title": "Matches postmortem anti-pattern",
+      "explanation": "Change resembles INCIDENT_PM_2024_03 direct web-to-payments bypass that caused duplicate charges.",
+      "citation_ids": ["INCIDENT_PM_2024_03"],
+      "related_paths": ["apps/web/checkout.py"],
+      "recommended_fix": "Remove direct payments import; use API gateway per postmortem required fix pattern."
+    }
+  ]
+}

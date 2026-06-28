@@ -1,0 +1,12 @@
+{
+  "findings": [
+    {
+      "severity": "medium",
+      "title": "Payment data path change",
+      "explanation": "Modification touches customer payment flow; medium compliance risk until reviewed.",
+      "citation_ids": ["ARCH_ADR_004"],
+      "related_paths": ["apps/web/checkout.py"],
+      "recommended_fix": "Ensure payment calls stay on approved gateway path and are logged for audit."
+    }
+  ]
+}

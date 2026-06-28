@@ -1,0 +1,12 @@
+{
+  "findings": [
+    {
+      "severity": "high",
+      "title": "Direct web to payments import",
+      "explanation": "checkout.py imports packages.payments.client, violating ARCH_ADR_004 service boundary rules.",
+      "citation_ids": ["ARCH_ADR_004", "INCIDENT_PM_2024_03"],
+      "related_paths": ["apps/web/checkout.py"],
+      "recommended_fix": "Use apps.api.payments_gateway.create_payment_intent instead of importing payments.client directly."
+    }
+  ]
+}
