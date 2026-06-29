@@ -7,6 +7,8 @@ import { getRepo } from "@/lib/workspace";
 import { RepoOverview } from "@/components/repo/overview";
 import { RunsPanel } from "@/components/repo/runs-panel";
 import { RulesPanel } from "@/components/repo/rules";
+import { McpSetupModal } from "@/components/repo/mcp-setup-modal";
+import { Button } from "@/components/ui/button";
 
 const tabs = [
   { id: "runs", label: "Runs" },
@@ -21,6 +23,7 @@ export default function RepoDashboardPage() {
   const repoId = params.id as string;
   const repo = getRepo(repoId);
   const [tab, setTab] = useState<TabId>("runs");
+  const [mcpOpen, setMcpOpen] = useState(false);
 
   if (!repo) {
     return (
@@ -46,7 +49,14 @@ export default function RepoDashboardPage() {
             {repo.source === "github" ? repo.githubUrl : "Local path"} · branch {repo.defaultBranch}
           </p>
         </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" size="sm" onClick={() => setMcpOpen(true)}>
+            Connect MCP
+          </Button>
+        </div>
       </div>
+
+      <McpSetupModal repoPath={repo.path} open={mcpOpen} onClose={() => setMcpOpen(false)} />
 
       <div className="flex gap-1 border-b border-hairline">
         {tabs.map((t) => (

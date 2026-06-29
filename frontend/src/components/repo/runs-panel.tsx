@@ -14,9 +14,10 @@ import type {
   StoredRun,
   VerificationRun,
 } from "@/lib/types";
-import { loadRuns, loadSettings, saveRun, titleCase } from "@/lib/workspace";
+import { loadRuns, loadSettings, saveRun } from "@/lib/workspace";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { RunHistory } from "@/components/repo/run-history";
 import {
   AgentTimeline,
   CitationsPanel,
@@ -130,11 +131,13 @@ export function RunsPanel({ repo }: { repo: Repository }) {
         id: result.id,
         repoId: repo.id,
         scopeMode,
+        baseRef,
+        headRef,
         startedAt: new Date().toISOString(),
         result,
       };
       saveRun(stored);
-      setRuns([stored, ...runs]);
+      setRuns((prev) => [stored, ...prev]);
       setActiveRun(result);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Run failed";
@@ -151,7 +154,8 @@ export function RunsPanel({ repo }: { repo: Repository }) {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="grid gap-8 xl:grid-cols-[1fr_320px]">
+      <div className="space-y-8 min-w-0">
       <section className="card-float rounded-lg bg-canvas p-6">
         <p className="font-mono text-xs uppercase text-mute">Start a run</p>
         <h2 className="mt-1 text-lg font-semibold">Verify changes</h2>
@@ -228,27 +232,6 @@ export function RunsPanel({ repo }: { repo: Repository }) {
         </ol>
       </section>
 
-      {runs.length > 0 && (
-        <section>
-          <h3 className="font-mono text-xs uppercase text-mute">Run history</h3>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {runs.map((r) => (
-              <button
-                key={r.id}
-                type="button"
-                onClick={() => setActiveRun(r.result)}
-                className={`rounded-sm border px-3 py-2 text-left text-sm ${
-                  activeRun?.id === r.id ? "border-ink bg-canvas-soft-2" : "border-hairline bg-canvas"
-                }`}
-              >
-                <span className="font-mono text-xs">{r.id}</span>
-                <span className="ml-2 text-body">{titleCase(r.result.risk_level)}</span>
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
-
       {activeRun && (
         <section className="space-y-6">
           <div className="flex flex-wrap gap-2">
@@ -284,6 +267,21 @@ export function RunsPanel({ repo }: { repo: Repository }) {
           </div>
         </section>
       )}
+
+      {!activeRun && !running && runs.length === 0 && (
+        <div className="card-elevated rounded-lg bg-canvas p-12 text-center">
+          <p className="text-sm text-body">Start a run to see results here.</p>
+        </div>
+      )}
+      </div>
+
+      <aside className="xl:sticky xl:top-24 xl:self-start">
+        <RunHistory
+          runs={runs}
+          activeId={activeRun?.id ?? null}
+          onSelect={(r) => setActiveRun(r.result)}
+        />
+      </aside>
     </div>
   );
 }

@@ -56,3 +56,38 @@ def list_corpus_files(corpus_root: Path) -> list[dict]:
         {"document": doc, "sections": sections}
         for doc, sections in sorted(by_file.items())
     ]
+
+
+def ensure_repo_corpus_dir(repo_path: Path) -> Path:
+    """Prefer existing corpus dir inside repo; create docs/trustloop_corpus if none."""
+    repo = repo_path.resolve()
+    for rel in CORPUS_CANDIDATES:
+        candidate = repo / rel
+        if candidate.is_dir():
+            return candidate
+    target = repo / "docs" / "trustloop_corpus"
+    target.mkdir(parents=True, exist_ok=True)
+    return target
+
+
+def append_rule(
+    repo_path: Path,
+    *,
+    citation_id: str,
+    section_title: str,
+    body: str,
+    filename: str = "custom_rules.md",
+) -> dict:
+    """Append a ## CITATION_ID section to repo-local corpus markdown."""
+    corpus = ensure_repo_corpus_dir(repo_path)
+    safe_name = "".join(c for c in filename if c.isalnum() or c in "._-").strip() or "custom_rules.md"
+    if not safe_name.endswith(".md"):
+        safe_name += ".md"
+    file_path = corpus / safe_name
+    section = f"\n\n## {citation_id.strip()}: {section_title.strip()}\n\n{body.strip()}\n"
+    if file_path.exists():
+        file_path.write_text(file_path.read_text(encoding="utf-8") + section, encoding="utf-8")
+    else:
+        header = f"# Custom rules\n\nRules added via TrustLoop dashboard.\n"
+        file_path.write_text(header + section, encoding="utf-8")
+    return {"path": str(file_path), "citation_id": citation_id, "corpus_path": str(corpus)}

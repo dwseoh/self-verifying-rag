@@ -1,5 +1,7 @@
 import type {
+  AddRuleRequest,
   HealthResponse,
+  McpConfigResponse,
   RepoIndexResponse,
   VerificationRun,
   VerifyRequest,
@@ -58,4 +60,27 @@ export async function fetchFixture(
   if (!res.ok) throw new Error("Fixture fetch failed");
   const data = await res.json();
   return data[kind];
+}
+
+export async function fetchMcpConfig(
+  baseUrl: string,
+  repoPath: string,
+): Promise<McpConfigResponse> {
+  const qs = new URLSearchParams({ repo_path: repoPath });
+  const res = await fetch(`${baseUrl}/api/mcp/config?${qs}`, { cache: "no-store" });
+  if (!res.ok) throw new Error("MCP config fetch failed");
+  return res.json();
+}
+
+export async function addRule(
+  baseUrl: string,
+  body: AddRuleRequest,
+): Promise<{ path: string; citation_id: string; corpus_path: string }> {
+  const res = await fetch(`${baseUrl}/api/repos/rules`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
 }

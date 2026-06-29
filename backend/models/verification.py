@@ -106,3 +106,11 @@ class AgentResult(BaseModel):
     latency_ms: int = 0
     findings: list[Finding] = Field(default_factory=list)
     error: str | None = None
+
+
+class AddRuleRequest(BaseModel):
+    repo_path: str
+    citation_id: str = Field(min_length=3, max_length=64)
+    section_title: str = Field(min_length=1, max_length=200)
+    body: str = Field(min_length=1)
+    filename: str = "custom_rules.md"
