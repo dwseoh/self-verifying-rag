@@ -49,8 +49,10 @@ export function RunsPanel({
   const [activeRun, setActiveRun] = useState<VerificationRun | null>(null);
   const [steps, setSteps] = useState<PipelineStep[]>(INITIAL_STEPS);
   const [running, setRunning] = useState(false);
+  const [demoChanging, setDemoChanging] = useState<"clean" | "violation" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
+  const [demoState, setDemoState] = useState<"clean" | "violation" | "unknown">("unknown");
   const [scopeMode, setScopeMode] = useState<ScopeMode>("paths");
   const [baseRef, setBaseRef] = useState(repo.defaultBranch);
   const [headRef, setHeadRef] = useState("HEAD");
@@ -65,6 +67,32 @@ export function RunsPanel({
 
   function patchStep(id: PipelineStep["id"], patch: Partial<PipelineStep>) {
     setSteps((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+  }
+
+  async function setCheckoutDemoState(mode: "clean" | "violation") {
+    setDemoChanging(mode);
+    setError(null);
+    setWarning(null);
+    try {
+      const res = await fetch("/api/demo/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      setDemoState(mode);
+      setPaths(DEFAULT_CHANGED_PATH);
+      setScopeMode("paths");
+      setWarning(
+        mode === "clean"
+          ? "checkout.py reset to the clean gateway path. Run Verify to show no high-severity findings."
+          : "Boundary violation seeded in checkout.py. Run Verify to show the high-severity finding.",
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to update checkout.py");
+    } finally {
+      setDemoChanging(null);
+    }
   }
 
   async function startRun(useFixture?: "clean" | "violation") {
@@ -211,6 +239,38 @@ export function RunsPanel({
           </p>
         </div>
 
+        <div className="mt-4 rounded-lg border border-hairline bg-canvas px-4 py-3 text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="font-medium text-ink">Demo checkout state</p>
+              <p className="mt-1 text-xs text-body">
+                Reset clean, seed the forbidden import, then verify the same file.
+              </p>
+            </div>
+            <Badge tone={demoState === "violation" ? "high" : demoState === "clean" ? "low" : "info"}>
+              {demoState}
+            </Badge>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setCheckoutDemoState("clean")}
+              disabled={running || demoChanging !== null}
+            >
+              {demoChanging === "clean" ? "Resetting..." : "Reset clean"}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setCheckoutDemoState("violation")}
+              disabled={running || demoChanging !== null}
+            >
+              {demoChanging === "violation" ? "Seeding..." : "Seed violation"}
+            </Button>
+          </div>
+        </div>
+
         <div className="mt-6 grid gap-4 md:grid-cols-2">
           <label className="block text-sm">
             <span className="text-body">Change scope</span>
@@ -326,7 +386,11 @@ export function RunsPanel({
 
       {!activeRun && !running && runs.length === 0 && (
         <div className="card-elevated rounded-lg bg-canvas p-12 text-center">
-          <p className="text-sm text-body">Start a run to see results here.</p>
+          <p className="text-sm font-medium text-ink">No verification run selected.</p>
+          <p className="mt-2 text-sm text-body">
+            Use Reset clean, Verify checkout.py, then Seed violation and Verify again for the judge
+            demo path.
+          </p>
         </div>
       )}
       </div>
