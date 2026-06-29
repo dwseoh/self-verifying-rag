@@ -1,6 +1,8 @@
 from enum import Enum
 from typing import Literal
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -76,6 +78,8 @@ class VerifyRequest(BaseModel):
     trigger: TriggerType = TriggerType.MANUAL
     diff_summary: str | None = None
     test_context: str | None = None
+    corpus_path: str | None = None
+    scope_mode: Literal["branch", "unstaged", "staged", "paths"] = "branch"
 
 
 class VerificationRun(BaseModel):

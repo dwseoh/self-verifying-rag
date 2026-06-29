@@ -45,6 +45,14 @@ async def health() -> dict:
     }
 
 
+@app.get("/api/repos/index")
+async def repo_index(repo_path: str = Query(...), corpus_path: str | None = None) -> dict:
+    """Graph ingestion stats + auto-discovered corpus for dashboard."""
+    from backend.api.repo_info import repo_index_summary
+
+    return repo_index_summary(repo_path, corpus_path)
+
+
 @app.get("/health/llm")
 async def health_llm() -> dict:
     """Live Cerebras connectivity check (uses API key)."""
