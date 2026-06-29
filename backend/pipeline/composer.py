@@ -1,6 +1,21 @@
 from backend.models import AgentResult, CorpusChunk, EvidenceSnippet, Finding
 
 
+def _infer_fix(finding: Finding, chunks: list[CorpusChunk]) -> str | None:
+    by_id = {c.citation_id: c for c in chunks}
+    for cid in finding.citation_ids:
+        ch = by_id.get(cid)
+        if not ch:
+            continue
+        for line in ch.text.splitlines():
+            low = line.lower()
+            if any(k in low for k in ("fix:", "how to fix", "instead", "should", "must not", "do not")):
+                return line.strip().lstrip("-•# ").strip()[:500]
+    if finding.related_paths:
+        return f"Review and update {finding.related_paths[0]} to align with cited rules."
+    return None
+
+
 def attach_evidence(findings: list[Finding], chunks: list[CorpusChunk]) -> list[Finding]:
     by_id = {c.citation_id: c for c in chunks}
     out: list[Finding] = []
@@ -11,7 +26,11 @@ def attach_evidence(findings: list[Finding], chunks: list[CorpusChunk]) -> list[
             if cid in by_id
         ]
         out.append(f.model_copy(update={"evidence_snippets": snippets}))
-    return out
+    finalized: list[Finding] = []
+    for f in out:
+        fix = f.recommended_fix or _infer_fix(f, chunks)
+        finalized.append(f.model_copy(update={"recommended_fix": fix}) if fix else f)
+    return finalized
 
 
 def compose_findings(agent_results: list[AgentResult], chunks: list[CorpusChunk]) -> list[Finding]:

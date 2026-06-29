@@ -52,11 +52,28 @@ export function RulesPanel({ repoPath }: { repoPath: string }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-body">
-          Rules from{" "}
-          <code className="rounded bg-canvas-soft-2 px-1 font-mono text-xs">{index.corpus.path}</code>
+          {index.corpus.summary ?? (
+            <>
+              Rules from{" "}
+              <code className="rounded bg-canvas-soft-2 px-1 font-mono text-xs">{index.corpus.path}</code>
+            </>
+          )}
           {" · "}
           {index.corpus.section_count} sections
         </p>
+        {index.corpus.using_shared_default && !index.corpus.repo_knowledge_files && (
+            <p className="mt-2 rounded-md border border-hairline bg-canvas-soft px-3 py-2 text-xs text-body">
+              No rules folder in this repo — using TrustLoop&apos;s shared default corpus. Add{" "}
+              <code className="font-mono">CLAUDE.md</code>,{" "}
+              <code className="font-mono">docs/trustloop_corpus/</code>, or use <strong>Add rule</strong>.
+            </p>
+          )}
+          {(index.corpus.repo_knowledge_files ?? 0) > 0 && (
+            <p className="mt-2 text-xs text-body">
+              Indexed {index.corpus.repo_knowledge_files} repo knowledge file(s) — CLAUDE.md, README, docs,{" "}
+              .cursor/rules, postmortems, etc.
+            </p>
+          )}
         <Button size="sm" variant="secondary" onClick={() => setShowAdd(!showAdd)}>
           {showAdd ? "Cancel" : "Add rule"}
         </Button>

@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useState } from "react";
-import { getRepo } from "@/lib/workspace";
+import { useEffect, useState } from "react";
+import type { Repository } from "@/lib/types";
+import { fetchRepository } from "@/lib/saas-api";
 import { RepoOverview } from "@/components/repo/overview";
 import { RunsPanel } from "@/components/repo/runs-panel";
 import { RulesPanel } from "@/components/repo/rules";
@@ -21,17 +22,27 @@ type TabId = (typeof tabs)[number]["id"];
 export default function RepoDashboardPage() {
   const params = useParams();
   const repoId = params.id as string;
-  const repo = getRepo(repoId);
+  const [repo, setRepo] = useState<Repository | null>(null);
   const [tab, setTab] = useState<TabId>("runs");
   const [mcpOpen, setMcpOpen] = useState(false);
+  const [workspacePath, setWorkspacePath] = useState<string>("");
+
+  useEffect(() => {
+    fetchRepository(repoId).then((r) => {
+      setRepo(r);
+      if (r) {
+        fetch(`/api/repos/${repoId}/path`)
+          .then((res) => (res.ok ? res.json() : null))
+          .then((data) => setWorkspacePath(data?.path ?? r.path))
+          .catch(() => setWorkspacePath(r.path));
+      }
+    });
+  }, [repoId]);
 
   if (!repo) {
     return (
       <div className="card-elevated rounded-lg bg-canvas p-8 text-center">
-        <p className="text-body">Repository not found.</p>
-        <Link href="/app/repositories" className="mt-4 inline-block text-link hover:underline">
-          Back to repositories
-        </Link>
+        <p className="text-body">Loading repository…</p>
       </div>
     );
   }
@@ -46,7 +57,8 @@ export default function RepoDashboardPage() {
           <h1 className="mt-2 text-2xl font-semibold tracking-tight">{repo.name}</h1>
           <p className="mt-1 font-mono text-sm text-body">{repo.path}</p>
           <p className="mt-1 text-xs text-mute">
-            {repo.source === "github" ? repo.githubUrl : "Local path"} · branch {repo.defaultBranch}
+            {repo.source === "github" ? repo.githubUrl ?? "GitHub" : "Local git"} · branch{" "}
+            {repo.defaultBranch}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -56,7 +68,11 @@ export default function RepoDashboardPage() {
         </div>
       </div>
 
-      <McpSetupModal repoPath={repo.path} open={mcpOpen} onClose={() => setMcpOpen(false)} />
+      <McpSetupModal
+        repoPath={workspacePath || repo.path}
+        open={mcpOpen}
+        onClose={() => setMcpOpen(false)}
+      />
 
       <div className="flex gap-1 border-b border-hairline">
         {tabs.map((t) => (
@@ -73,9 +89,9 @@ export default function RepoDashboardPage() {
         ))}
       </div>
 
-      {tab === "runs" && <RunsPanel repo={repo} />}
-      {tab === "overview" && <RepoOverview repoPath={repo.path} />}
-      {tab === "rules" && <RulesPanel repoPath={repo.path} />}
+      {tab === "runs" && <RunsPanel repo={repo} workspacePath={workspacePath} />}
+      {tab === "overview" && <RepoOverview repoPath={workspacePath || repo.path} />}
+      {tab === "rules" && <RulesPanel repoPath={workspacePath || repo.path} />}
     </div>
   );
 }

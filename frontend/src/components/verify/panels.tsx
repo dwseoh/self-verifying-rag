@@ -56,9 +56,10 @@ export function FindingsPanel({ run }: { run: VerificationRun }) {
             <span>{finding.detected_by.map(titleCase).join(", ")}</span>
           </div>
           {finding.recommended_fix && (
-            <p className="mt-4 rounded-md bg-canvas-soft px-3 py-2 text-sm text-ink">
-              {finding.recommended_fix}
-            </p>
+            <div className="mt-4 rounded-md border border-link/15 bg-link-bg-soft px-3 py-3">
+              <p className="font-mono text-xs uppercase text-mute">How to fix</p>
+              <p className="mt-1 text-sm leading-6 text-ink">{finding.recommended_fix}</p>
+            </div>
           )}
         </article>
       ))}

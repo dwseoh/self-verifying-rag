@@ -79,7 +79,8 @@ class VerifyRequest(BaseModel):
     diff_summary: str | None = None
     test_context: str | None = None
     corpus_path: str | None = None
-    scope_mode: Literal["branch", "unstaged", "staged", "paths"] = "branch"
+    scope_mode: Literal["branch", "unstaged", "staged", "paths", "snapshot"] = "branch"
+    snapshot_prefix: str | None = None
 
 
 class VerificationRun(BaseModel):

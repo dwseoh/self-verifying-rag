@@ -5,11 +5,56 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from backend.config import settings
 from backend.indexer import git
 from backend.indexer.graph import diff_summary_for_paths
 from backend.models import VerifyRequest
 
 _DEMO_DEFAULT = "apps/web/checkout.py"
+_PRIORITY_DIRS = ("src/", "app/", "lib/", "components/", "pages/", "api/", "backend/", "frontend/src/")
+_CODE_EXTS = {".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py", ".c", ".cpp", ".h", ".hpp"}
+
+
+def _snapshot_max_files() -> int:
+    return max(1, settings.trustloop_snapshot_max_files)
+
+
+def _normalize_prefix(prefix: str | None) -> str | None:
+    if not prefix or not prefix.strip():
+        return None
+    p = prefix.strip().replace("\\", "/").lstrip("./")
+    return p if p.endswith("/") else f"{p}/"
+
+
+def _filter_snapshot_prefix(paths: list[str], prefix: str | None) -> list[str]:
+    norm_prefix = _normalize_prefix(prefix)
+    if not norm_prefix:
+        return paths
+    out: list[str] = []
+    bare = norm_prefix.rstrip("/")
+    for rel in paths:
+        norm = rel.replace("\\", "/")
+        if norm.startswith(norm_prefix) or norm == bare:
+            out.append(rel)
+    return out
+
+
+def _prioritize_snapshot_paths(paths: list[str]) -> list[str]:
+    def sort_key(p: str) -> tuple[int, str]:
+        norm = p.replace("\\", "/")
+        ext = Path(norm).suffix.lower()
+        score = 2
+        if any(norm.startswith(d) for d in _PRIORITY_DIRS):
+            score = 0
+        elif ext in _CODE_EXTS:
+            score = 1
+        if ext == ".md":
+            score += 1
+        if ext in {".css", ".scss"}:
+            score += 1
+        return (score, norm)
+
+    return sorted(paths, key=sort_key)
 
 
 @dataclass
@@ -30,7 +75,7 @@ def resolve_scope(repo: Path, req: VerifyRequest) -> VerifyScope:
     """
     Priority:
     1. req.diff_summary (explicit)
-    2. scope_mode: unstaged / staged / branch (git)
+    2. scope_mode: unstaged / staged / branch / snapshot (git)
     3. req.changed_paths file contents
     4. demo checkout.py only if that file exists in this repo
     """
@@ -42,6 +87,40 @@ def resolve_scope(repo: Path, req: VerifyRequest) -> VerifyScope:
 
     if git.is_git_repo(repo):
         try:
+            if mode == "snapshot":
+                ref = (req.head_ref or req.base_ref or "main").strip() or "main"
+                prefix = req.snapshot_prefix
+                if req.changed_paths:
+                    paths = list(req.changed_paths)
+                else:
+                    paths = _filter_snapshot_prefix(git.files_at_ref(repo, ref), prefix)
+                warning = None
+                if not paths:
+                    hint = f" under {prefix!r}" if prefix else ""
+                    return VerifyScope(
+                        changed_paths=[],
+                        diff_summary="",
+                        used_git=True,
+                        warning=f"No scoped files found at {ref}{hint}.",
+                    )
+                total = len(paths)
+                max_files = _snapshot_max_files()
+                paths = _prioritize_snapshot_paths(paths)
+                if total > max_files:
+                    prefix_note = f" matching {prefix!r}" if prefix else ""
+                    warning = (
+                        f"Snapshot capped at {max_files} of {total} scoped files at {ref}{prefix_note}. "
+                        "Narrow with snapshot path prefix (e.g. src/) or raise TRUSTLOOP_SNAPSHOT_MAX_FILES."
+                    )
+                    paths = paths[:max_files]
+                diff = git.snapshot_summary(repo, ref, paths)
+                return VerifyScope(
+                    changed_paths=paths,
+                    diff_summary=diff,
+                    used_git=True,
+                    warning=warning,
+                )
+
             if mode == "unstaged":
                 paths = list(req.changed_paths) if req.changed_paths else git.working_tree_files(repo, staged=False)
                 if not paths:

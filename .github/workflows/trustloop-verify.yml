@@ -1,0 +1,75 @@
+name: TrustLoop Verify
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  statuses: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run TrustLoop verification
+        env:
+          TRUSTLOOP_API: ${{ secrets.TRUSTLOOP_API_URL }}
+          TRUSTLOOP_TOKEN: ${{ secrets.TRUSTLOOP_API_TOKEN }}
+        run: |
+          BASE="${{ github.event.pull_request.base.ref }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+          REPO_PATH="${{ github.workspace }}"
+
+          PAYLOAD=$(jq -n \
+            --arg repo_path "$REPO_PATH" \
+            --arg base_ref "$BASE" \
+            --arg head_ref "$HEAD" \
+            --arg trigger "pr" \
+            '{repo_path: $repo_path, base_ref: $base_ref, head_ref: $head_ref, scope_mode: "branch", trigger: $trigger}')
+
+          HTTP=$(curl -sS -w "%{http_code}" -o /tmp/trustloop.json \
+            -X POST "$TRUSTLOOP_API/api/verify" \
+            -H "Content-Type: application/json" \
+            ${TRUSTLOOP_TOKEN:+-H "Authorization: Bearer $TRUSTLOOP_TOKEN"} \
+            -d "$PAYLOAD")
+          cat /tmp/trustloop.json
+
+          if [ "$HTTP" != "200" ]; then
+            echo "TrustLoop verify failed ($HTTP)"
+            exit 1
+          fi
+
+          FINDINGS=$(jq '.findings | length' /tmp/trustloop.json)
+          RISK=$(jq -r '.risk_level' /tmp/trustloop.json)
+          RUN_ID=$(jq -r '.id' /tmp/trustloop.json)
+
+          if [ "$FINDINGS" -gt 0 ] || [ "$RISK" = "high" ]; then
+            echo "TrustLoop reported $FINDINGS finding(s), risk=$RISK"
+            exit 1
+          fi
+
+          echo "TrustLoop passed (run $RUN_ID)"
+
+      - name: Comment on PR (optional)
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let body = 'TrustLoop verification finished.';
+            try {
+              const run = JSON.parse(fs.readFileSync('/tmp/trustloop.json', 'utf8'));
+              body = `## TrustLoop\n\n**Risk:** ${run.risk_level} · **Findings:** ${run.findings?.length ?? 0}\n\nRun \`${run.id}\``;
+            } catch {}
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });

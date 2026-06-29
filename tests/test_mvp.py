@@ -154,3 +154,37 @@ def test_source_file_discovery_includes_c(repo_path):
     names = {p.name for p in iter_source_files(repo_path)}
     assert "gateway_stub.c" in names
     assert "checkout.py" in names
+
+
+def test_snapshot_scope(repo_path):
+    from backend.indexer import git as git_mod
+    from backend.indexer.scope import resolve_scope
+
+    if not git_mod.is_git_repo(repo_path):
+        pytest.skip("demo_repo is not a git repository")
+    scope = resolve_scope(
+        repo_path,
+        VerifyRequest(repo_path=str(repo_path), scope_mode="snapshot", head_ref="HEAD"),
+    )
+    assert scope.changed_paths
+    assert "Snapshot review" in scope.diff_summary
+    assert scope.used_git
+
+
+def test_snapshot_prefix_filter(repo_path):
+    from backend.indexer import git as git_mod
+    from backend.indexer.scope import resolve_scope
+
+    if not git_mod.is_git_repo(repo_path):
+        pytest.skip("demo_repo is not a git repository")
+    scope = resolve_scope(
+        repo_path,
+        VerifyRequest(
+            repo_path=str(repo_path),
+            scope_mode="snapshot",
+            head_ref="HEAD",
+            snapshot_prefix="apps/web",
+        ),
+    )
+    assert scope.changed_paths
+    assert all("apps/web" in p for p in scope.changed_paths)

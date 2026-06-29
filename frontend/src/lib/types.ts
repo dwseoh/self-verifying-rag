@@ -1,6 +1,6 @@
 export type Severity = "low" | "medium" | "high";
 export type RiskLevel = "low" | "medium" | "high";
-export type ScopeMode = "branch" | "unstaged" | "staged" | "paths";
+export type ScopeMode = "branch" | "unstaged" | "staged" | "paths" | "snapshot";
 export type RepoSource = "local" | "github";
 
 export interface EvidenceSnippet {
@@ -77,6 +77,7 @@ export interface VerifyRequest {
   head_ref?: string;
   trigger?: string;
   scope_mode?: ScopeMode;
+  snapshot_prefix?: string;
   corpus_path?: string;
 }
 
@@ -107,14 +108,31 @@ export interface RepoIndexResponse {
     cached_files: number;
     python_files: number;
     c_cpp_files: number;
+    web_files?: number;
   };
   corpus: {
     path: string;
+    summary?: string;
     auto_discovered: boolean;
+    using_global_fallback?: boolean;
+    using_shared_default?: boolean;
+    formal_section_count?: number;
+    repo_knowledge_files?: number;
+    knowledge_sources?: Array<{ path: string; citation_id: string; size_bytes: number }>;
     section_count: number;
     documents: Array<{
       document: string;
       sections: Array<{ citation_id: string; section_title: string; text_preview: string }>;
+    }>;
+  };
+  code_health?: {
+    finding_count: number;
+    findings: Array<{
+      id: string;
+      severity: string;
+      title: string;
+      explanation: string;
+      recommended_fix?: string;
     }>;
   };
 }
@@ -126,16 +144,21 @@ export interface StoredRun {
   baseRef: string;
   headRef: string;
   startedAt: string;
-  result: VerificationRun;
+  status?: string;
+  result?: VerificationRun;
 }
 
 export interface McpConfigResponse {
   server_name: string;
-  command: string;
-  args: string[];
-  cwd: string;
-  install: string;
-  run_script: string;
+  mode?: string;
+  install_url?: string;
+  install_command?: string;
+  api_url?: string;
+  command?: string;
+  args?: string[];
+  cwd?: string;
+  install?: string;
+  run_script?: string;
   default_repo_path: string;
   tools: Array<{ name: string; description: string }>;
   cursor_config_json: Record<string, unknown>;

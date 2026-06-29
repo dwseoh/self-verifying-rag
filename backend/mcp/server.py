@@ -1,9 +1,11 @@
-"""MCP server — expose TrustLoop verify tools to Cursor / Claude Code (Add-on A3)."""
+"""MCP server — local pipeline or remote API via TRUSTLOOP_API_URL."""
 
 from __future__ import annotations
 
 import json
+import os
 
+import httpx
 from mcp.server.fastmcp import FastMCP
 
 from backend.models import TriggerType, VerifyRequest
@@ -13,18 +15,51 @@ from backend.storage.run_cache import get_last_run, set_last_run
 
 mcp = FastMCP("trustloop")
 
+API_URL = os.environ.get("TRUSTLOOP_API_URL", "").rstrip("/")
+DEFAULT_REPO = os.environ.get("TRUSTLOOP_REPO_PATH", "")
+
+
+def _use_remote() -> bool:
+    return bool(API_URL)
+
+
+async def _remote_verify(body: dict) -> dict:
+    async with httpx.AsyncClient(timeout=300.0) as client:
+        res = await client.post(f"{API_URL}/api/verify", json=body)
+        res.raise_for_status()
+        return res.json()
+
 
 @mcp.tool()
 async def verify_diff(
-    repo_path: str = "data/demo_repo",
+    repo_path: str = "",
     changed_paths: list[str] | None = None,
     base_ref: str = "main",
     head_ref: str = "HEAD",
     trigger: str = "manual",
 ) -> str:
-    """Run full TrustLoop verification on a repo path or git ref range. Returns VerificationRun JSON."""
+    """Run TrustLoop verification. Uses TRUSTLOOP_API_URL when set, else local pipeline."""
+    path = repo_path or DEFAULT_REPO
+    if not path:
+        return json.dumps(
+            {
+                "error": "repo_path required — set TRUSTLOOP_REPO_PATH or pass repo_path to verify_diff",
+            }
+        )
+    body = {
+        "repo_path": path,
+        "changed_paths": changed_paths or [],
+        "base_ref": base_ref,
+        "head_ref": head_ref,
+        "trigger": trigger,
+    }
+
+    if _use_remote():
+        run = await _remote_verify(body)
+        return json.dumps(run)
+
     req = VerifyRequest(
-        repo_path=repo_path,
+        repo_path=path,
         changed_paths=changed_paths or [],
         base_ref=base_ref,
         head_ref=head_ref,
@@ -38,6 +73,13 @@ async def verify_diff(
 @mcp.tool()
 async def get_findings() -> str:
     """Return findings from the most recent verify_diff call."""
+    if _use_remote():
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            res = await client.get(f"{API_URL}/api/findings/latest")
+            res.raise_for_status()
+            data = res.json()
+            return json.dumps(data.get("findings", data), indent=2)
+
     run = get_last_run()
     if not run:
         return json.dumps({"findings": [], "message": "No run yet — call verify_diff first"})

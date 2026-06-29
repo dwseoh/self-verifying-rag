@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   fetchHealth,
   fetchPreview,
   fetchRepoIndex,
   runVerification,
 } from "@/lib/api";
+import { fetchRuns, startRun as startRunApi } from "@/lib/saas-api";
 import type {
   PipelineStep,
   Repository,
@@ -14,7 +15,7 @@ import type {
   StoredRun,
   VerificationRun,
 } from "@/lib/types";
-import { loadRuns, loadSettings, saveRun } from "@/lib/workspace";
+import { loadSettings } from "@/lib/workspace";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { RunHistory } from "@/components/repo/run-history";
@@ -24,6 +25,7 @@ import {
   FindingsPanel,
   SummaryGrid,
 } from "@/components/verify/panels";
+import { isNorthstarDemoRepo } from "@/lib/demo";
 
 const INITIAL_STEPS: PipelineStep[] = [
   { id: "index", label: "Index repository", status: "pending" },
@@ -33,54 +35,147 @@ const INITIAL_STEPS: PipelineStep[] = [
   { id: "compose", label: "Compose findings", status: "pending" },
 ];
 
-export function RunsPanel({ repo }: { repo: Repository }) {
+const DEMO_CHECKOUT_PATH = "apps/web/checkout.py";
+
+export function RunsPanel({
+  repo,
+  workspacePath,
+}: {
+  repo: Repository;
+  workspacePath?: string;
+}) {
   const settings = loadSettings();
-  const [runs, setRuns] = useState<StoredRun[]>(() => loadRuns(repo.id));
-  const [activeRun, setActiveRun] = useState<VerificationRun | null>(runs[0]?.result ?? null);
+  const repoPath = workspacePath || repo.path;
+  const isDemoRepo = isNorthstarDemoRepo(repoPath);
+  const [runs, setRuns] = useState<StoredRun[]>([]);
+  const [activeRun, setActiveRun] = useState<VerificationRun | null>(null);
   const [steps, setSteps] = useState<PipelineStep[]>(INITIAL_STEPS);
   const [running, setRunning] = useState(false);
+  const [demoChanging, setDemoChanging] = useState<"clean" | "violation" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
+  const [demoState, setDemoState] = useState<"clean" | "violation" | "unknown">("unknown");
   const [scopeMode, setScopeMode] = useState<ScopeMode>("branch");
   const [baseRef, setBaseRef] = useState(repo.defaultBranch);
   const [headRef, setHeadRef] = useState("HEAD");
   const [paths, setPaths] = useState("");
+  const [snapshotPrefix, setSnapshotPrefix] = useState("src/");
+  const [scopePreview, setScopePreview] = useState<{
+    fileCount: number | null;
+    warning: string | null;
+    loading: boolean;
+  }>({ fileCount: null, warning: null, loading: false });
+
+  useEffect(() => {
+    fetchRuns(repo.id).then((loaded) => {
+      setRuns(loaded);
+      if (loaded[0]?.result) setActiveRun(loaded[0].result);
+    });
+  }, [repo.id]);
+
+  useEffect(() => {
+    if (scopeMode === "snapshot") {
+      setHeadRef((current) => (current === "HEAD" ? repo.defaultBranch || "main" : current));
+    }
+  }, [scopeMode, repo.defaultBranch]);
+
+  useEffect(() => {
+    if (scopeMode === "paths" && !paths.trim()) {
+      setScopePreview({ fileCount: null, warning: null, loading: false });
+      return;
+    }
+    const backend = settings.backendUrl;
+    const t = setTimeout(() => {
+      setScopePreview((p) => ({ ...p, loading: true }));
+      fetchPreview(backend, {
+        repo_path: repoPath,
+        base_ref: baseRef,
+        head_ref: headRef,
+        scope_mode: scopeMode,
+        snapshot_prefix: scopeMode === "snapshot" && snapshotPrefix.trim() ? snapshotPrefix.trim() : undefined,
+        changed_paths:
+          scopeMode === "paths" && paths.trim()
+            ? paths.split(",").map((p) => p.trim()).filter(Boolean)
+            : undefined,
+      })
+        .then((preview) => {
+          const changed = (preview.changed_paths as string[]) ?? [];
+          setScopePreview({
+            fileCount: changed.length,
+            warning: (preview.warning as string) ?? null,
+            loading: false,
+          });
+        })
+        .catch(() => setScopePreview({ fileCount: null, warning: null, loading: false }));
+    }, 400);
+    return () => clearTimeout(t);
+  }, [scopeMode, baseRef, headRef, paths, snapshotPrefix, repoPath, settings.backendUrl]);
 
   function patchStep(id: PipelineStep["id"], patch: Partial<PipelineStep>) {
     setSteps((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
   }
 
+  async function setCheckoutDemoState(mode: "clean" | "violation") {
+    setDemoChanging(mode);
+    setError(null);
+    setWarning(null);
+    try {
+      const res = await fetch("/api/demo/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      setDemoState(mode);
+      setPaths(DEMO_CHECKOUT_PATH);
+      setScopeMode("paths");
+      setWarning(
+        mode === "clean"
+          ? "checkout.py reset to the clean gateway path. Run Verify to show no high-severity findings."
+          : "Boundary violation seeded in checkout.py. Run Verify to show the high-severity finding.",
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to update checkout.py");
+    } finally {
+      setDemoChanging(null);
+    }
+  }
+
   async function startRun(useFixture?: "clean" | "violation") {
     setRunning(true);
     setError(null);
+    setWarning(null);
     setSteps(INITIAL_STEPS.map((s) => ({ ...s, status: "pending" as const })));
 
     const baseUrl = settings.backendUrl;
-    const changed_paths =
+    const requestedChangedPaths =
       scopeMode === "paths" && paths.trim()
         ? paths.split(",").map((p) => p.trim()).filter(Boolean)
         : undefined;
+    let resolvedChangedPaths = requestedChangedPaths;
 
     const body = {
-      repo_path: repo.path,
+      repo_path: repoPath,
       base_ref: baseRef,
       head_ref: headRef,
       scope_mode: scopeMode,
-      changed_paths,
+      snapshot_prefix: scopeMode === "snapshot" && snapshotPrefix.trim() ? snapshotPrefix.trim() : undefined,
+      changed_paths: requestedChangedPaths,
     };
 
     try {
       if (!useFixture) {
         const health = await fetchHealth(baseUrl);
         if (health.mock_mode) {
-          throw new Error(
-            "No Cerebras API key on the backend. Add CEREBRAS_API_KEY to backend .env, or use Demo run.",
+          setWarning(
+            "Backend is in mock mode because CEREBRAS_API_KEY is missing. Verify still runs against the live pipeline shape.",
           );
         }
       }
 
       patchStep("index", { status: "running" });
       const t0 = performance.now();
-      const index = await fetchRepoIndex(baseUrl, repo.path);
+      const index = await fetchRepoIndex(baseUrl, repoPath);
       patchStep("index", {
         status: "done",
         ms: Math.round(performance.now() - t0),
@@ -91,13 +186,16 @@ export function RunsPanel({ repo }: { repo: Repository }) {
       const t1 = performance.now();
       const preview = await fetchPreview(baseUrl, body);
       const changed = (preview.changed_paths as string[]) ?? [];
+      if (!resolvedChangedPaths && changed.length > 0) {
+        resolvedChangedPaths = changed;
+      }
       patchStep("scope", {
         status: "done",
         ms: Math.round(performance.now() - t1),
         detail: `${changed.length} file(s) in scope`,
       });
       if (preview.warning) {
-        setError(String(preview.warning));
+        setWarning(String(preview.warning));
       }
 
       patchStep("rules", { status: "running" });
@@ -113,7 +211,35 @@ export function RunsPanel({ repo }: { repo: Repository }) {
         patchStep("agents", { status: "running" });
       }
 
-      const result = await runVerification(baseUrl, body, useFixture ? { fixture: useFixture } : undefined);
+      let stored: StoredRun;
+      try {
+        stored = await startRunApi({
+          repositoryId: repo.id,
+          scopeMode,
+          baseRef,
+          headRef,
+          changedPaths: resolvedChangedPaths,
+          snapshotPrefix: scopeMode === "snapshot" ? snapshotPrefix.trim() : undefined,
+          fixture: useFixture,
+        });
+      } catch {
+        const result = await runVerification(
+          baseUrl,
+          { ...body, changed_paths: resolvedChangedPaths },
+          useFixture ? { fixture: useFixture } : undefined,
+        );
+        stored = {
+          id: result.id,
+          repoId: repo.id,
+          scopeMode,
+          baseRef,
+          headRef,
+          startedAt: new Date().toISOString(),
+          result,
+        };
+      }
+
+      const result = stored.result!;
       patchStep("agents", {
         status: "done",
         ms: result.latency.parallel_verification_ms,
@@ -127,16 +253,6 @@ export function RunsPanel({ repo }: { repo: Repository }) {
         detail: `${result.findings.length} findings`,
       });
 
-      const stored: StoredRun = {
-        id: result.id,
-        repoId: repo.id,
-        scopeMode,
-        baseRef,
-        headRef,
-        startedAt: new Date().toISOString(),
-        result,
-      };
-      saveRun(stored);
       setRuns((prev) => [stored, ...prev]);
       setActiveRun(result);
     } catch (e) {
@@ -163,6 +279,76 @@ export function RunsPanel({ repo }: { repo: Repository }) {
           A <strong>run</strong> indexes the whole repo (cached), then verifies your selected change scope
           against rules + dependency graph. Same pipeline as CI — not a separate “verify” product.
         </p>
+        <div className="mt-4 rounded-lg border border-hairline bg-canvas-soft px-4 py-3 text-sm">
+          <p className="font-medium text-ink">Scope preview</p>
+          <p className="mt-1 text-xs text-body">
+            Dry-run of what the backend will verify — calls{" "}
+            <code className="font-mono">/api/verify/preview</code> (no LLM). Updates when you change scope.
+          </p>
+          <dl className="mt-3 space-y-1 font-mono text-xs text-body">
+            <div className="flex flex-wrap gap-x-2">
+              <dt className="text-mute">mode</dt>
+              <dd>
+                {scopeMode === "branch" && `branch diff · ${baseRef}…${headRef}`}
+                {scopeMode === "snapshot" && `snapshot · @${headRef}${snapshotPrefix.trim() ? ` · ${snapshotPrefix.trim()}` : ""}`}
+                {scopeMode === "unstaged" && "unstaged working tree"}
+                {scopeMode === "staged" && "staged index"}
+                {scopeMode === "paths" && (paths.trim() ? `paths · ${paths}` : "paths · (none yet)")}
+              </dd>
+            </div>
+            <div className="flex flex-wrap gap-x-2">
+              <dt className="text-mute">repo</dt>
+              <dd className="break-all">{repoPath}</dd>
+            </div>
+            <div className="flex flex-wrap gap-x-2">
+              <dt className="text-mute">files</dt>
+              <dd>
+                {scopePreview.loading
+                  ? "resolving…"
+                  : scopePreview.fileCount != null
+                    ? `${scopePreview.fileCount} in scope`
+                    : "—"}
+              </dd>
+            </div>
+          </dl>
+          {scopePreview.warning && (
+            <p className="mt-2 text-xs text-warning">{scopePreview.warning}</p>
+          )}
+        </div>
+
+        {isDemoRepo && (
+        <div className="mt-4 rounded-lg border border-hairline bg-canvas px-4 py-3 text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="font-medium text-ink">Demo checkout state</p>
+              <p className="mt-1 text-xs text-body">
+                Reset clean, seed the forbidden import, then verify the same file.
+              </p>
+            </div>
+            <Badge tone={demoState === "violation" ? "high" : demoState === "clean" ? "low" : "info"}>
+              {demoState}
+            </Badge>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setCheckoutDemoState("clean")}
+              disabled={running || demoChanging !== null}
+            >
+              {demoChanging === "clean" ? "Resetting..." : "Reset clean"}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setCheckoutDemoState("violation")}
+              disabled={running || demoChanging !== null}
+            >
+              {demoChanging === "violation" ? "Seeding..." : "Seed violation"}
+            </Button>
+          </div>
+        </div>
+        )}
 
         <div className="mt-6 grid gap-4 md:grid-cols-2">
           <label className="block text-sm">
@@ -173,6 +359,7 @@ export function RunsPanel({ repo }: { repo: Repository }) {
               onChange={(e) => setScopeMode(e.target.value as ScopeMode)}
             >
               <option value="branch">Branch diff (base…head)</option>
+              <option value="snapshot">Snapshot (review ref as-is)</option>
               <option value="unstaged">Unstaged working tree</option>
               <option value="staged">Staged changes</option>
               <option value="paths">Specific files</option>
@@ -190,12 +377,38 @@ export function RunsPanel({ repo }: { repo: Repository }) {
               </label>
             </>
           )}
+          {scopeMode === "snapshot" && (
+            <>
+              <label className="block text-sm">
+                <span className="text-body">Git ref to review</span>
+                <input
+                  className="mt-1 h-10 w-full rounded-sm border border-hairline px-3 font-mono text-sm"
+                  value={headRef}
+                  onChange={(e) => setHeadRef(e.target.value)}
+                  placeholder="main"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="text-body">Path prefix (optional)</span>
+                <input
+                  className="mt-1 h-10 w-full rounded-sm border border-hairline px-3 font-mono text-sm"
+                  value={snapshotPrefix}
+                  onChange={(e) => setSnapshotPrefix(e.target.value)}
+                  placeholder="src/"
+                />
+                <span className="mt-1 block text-xs text-mute">
+                  Only files under this folder (e.g. <code className="font-mono">src/</code>,{" "}
+                  <code className="font-mono">app/</code>). Up to 80 code files prioritized — not all 796 at once.
+                </span>
+              </label>
+            </>
+          )}
           {scopeMode === "paths" && (
             <label className="block text-sm md:col-span-2">
               <span className="text-body">Files (comma-separated)</span>
               <input
                 className="mt-1 h-10 w-full rounded-sm border border-hairline px-3 font-mono text-sm"
-                placeholder="apps/web/checkout.py"
+                placeholder="src/app/page.tsx, lib/api.ts"
                 value={paths}
                 onChange={(e) => setPaths(e.target.value)}
               />
@@ -205,12 +418,25 @@ export function RunsPanel({ repo }: { repo: Repository }) {
 
         <div className="mt-6 flex flex-wrap gap-2">
           <Button size="sm" onClick={() => startRun()} disabled={running}>
-            {running ? "Running…" : "Start run"}
+            {running ? "Running…" : "Start verification"}
           </Button>
-          <Button variant="secondary" size="sm" onClick={() => startRun("violation")} disabled={running}>
-            Demo (fixture)
-          </Button>
+          {isDemoRepo && (
+            <>
+              <Button variant="secondary" size="sm" onClick={() => startRun("violation")} disabled={running}>
+                Demo violation fixture
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => startRun("clean")} disabled={running}>
+                Demo clean fixture
+              </Button>
+            </>
+          )}
         </div>
+
+        {warning && (
+          <div className="mt-4 rounded-lg border border-warning/30 bg-warning-soft px-4 py-3 text-sm text-ink">
+            {warning}
+          </div>
+        )}
 
         {error && (
           <div className="mt-4 rounded-lg border border-error/20 bg-error-soft px-4 py-3 text-sm text-error">
@@ -270,7 +496,12 @@ export function RunsPanel({ repo }: { repo: Repository }) {
 
       {!activeRun && !running && runs.length === 0 && (
         <div className="card-elevated rounded-lg bg-canvas p-12 text-center">
-          <p className="text-sm text-body">Start a run to see results here.</p>
+          <p className="text-sm font-medium text-ink">No verification run selected.</p>
+          <p className="mt-2 text-sm text-body">
+            {isDemoRepo
+              ? "Use Reset clean, Start verification, then Seed violation and verify again for the judge demo path."
+              : "Choose a change scope (branch diff is default) and start a verification run."}
+          </p>
         </div>
       )}
       </div>
@@ -279,7 +510,7 @@ export function RunsPanel({ repo }: { repo: Repository }) {
         <RunHistory
           runs={runs}
           activeId={activeRun?.id ?? null}
-          onSelect={(r) => setActiveRun(r.result)}
+          onSelect={(r) => r.result && setActiveRun(r.result)}
         />
       </aside>
     </div>

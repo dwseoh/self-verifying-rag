@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { fetchHealth, testLlmConnection } from "@/lib/api";
+import { GitHubConnection } from "@/components/settings/github-connection";
 import { loadSettings, saveSettings } from "@/lib/workspace";
 import { Button } from "@/components/ui/button";
 
@@ -65,6 +66,13 @@ export default function SettingsPage() {
           {message.text}
         </div>
       )}
+
+      <section className="card-float space-y-4 rounded-lg bg-canvas p-6">
+        <h2 className="text-lg font-semibold">GitHub</h2>
+        <Suspense fallback={<p className="text-sm text-body">Loading…</p>}>
+          <GitHubConnection />
+        </Suspense>
+      </section>
 
       <section className="card-float space-y-4 rounded-lg bg-canvas p-6">
         <h2 className="text-lg font-semibold">Cerebras API key</h2>
