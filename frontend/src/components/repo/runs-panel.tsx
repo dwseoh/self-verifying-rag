@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   fetchHealth,
   fetchPreview,
   fetchRepoIndex,
   runVerification,
 } from "@/lib/api";
+import { fetchRuns, startRun as startRunApi } from "@/lib/saas-api";
 import type {
   PipelineStep,
   Repository,
@@ -14,7 +15,7 @@ import type {
   StoredRun,
   VerificationRun,
 } from "@/lib/types";
-import { loadRuns, loadSettings, saveRun } from "@/lib/workspace";
+import { loadSettings } from "@/lib/workspace";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { RunHistory } from "@/components/repo/run-history";
@@ -33,10 +34,17 @@ const INITIAL_STEPS: PipelineStep[] = [
   { id: "compose", label: "Compose findings", status: "pending" },
 ];
 
-export function RunsPanel({ repo }: { repo: Repository }) {
+export function RunsPanel({
+  repo,
+  workspacePath,
+}: {
+  repo: Repository;
+  workspacePath?: string;
+}) {
   const settings = loadSettings();
-  const [runs, setRuns] = useState<StoredRun[]>(() => loadRuns(repo.id));
-  const [activeRun, setActiveRun] = useState<VerificationRun | null>(runs[0]?.result ?? null);
+  const repoPath = workspacePath || repo.path;
+  const [runs, setRuns] = useState<StoredRun[]>([]);
+  const [activeRun, setActiveRun] = useState<VerificationRun | null>(null);
   const [steps, setSteps] = useState<PipelineStep[]>(INITIAL_STEPS);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,6 +52,13 @@ export function RunsPanel({ repo }: { repo: Repository }) {
   const [baseRef, setBaseRef] = useState(repo.defaultBranch);
   const [headRef, setHeadRef] = useState("HEAD");
   const [paths, setPaths] = useState("");
+
+  useEffect(() => {
+    fetchRuns(repo.id).then((loaded) => {
+      setRuns(loaded);
+      if (loaded[0]?.result) setActiveRun(loaded[0].result);
+    });
+  }, [repo.id]);
 
   function patchStep(id: PipelineStep["id"], patch: Partial<PipelineStep>) {
     setSteps((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
@@ -61,7 +76,7 @@ export function RunsPanel({ repo }: { repo: Repository }) {
         : undefined;
 
     const body = {
-      repo_path: repo.path,
+      repo_path: repoPath,
       base_ref: baseRef,
       head_ref: headRef,
       scope_mode: scopeMode,
@@ -80,7 +95,7 @@ export function RunsPanel({ repo }: { repo: Repository }) {
 
       patchStep("index", { status: "running" });
       const t0 = performance.now();
-      const index = await fetchRepoIndex(baseUrl, repo.path);
+      const index = await fetchRepoIndex(baseUrl, repoPath);
       patchStep("index", {
         status: "done",
         ms: Math.round(performance.now() - t0),
@@ -113,7 +128,34 @@ export function RunsPanel({ repo }: { repo: Repository }) {
         patchStep("agents", { status: "running" });
       }
 
-      const result = await runVerification(baseUrl, body, useFixture ? { fixture: useFixture } : undefined);
+      let stored: StoredRun;
+      try {
+        stored = await startRunApi({
+          repositoryId: repo.id,
+          scopeMode,
+          baseRef,
+          headRef,
+          changedPaths: changed_paths,
+          fixture: useFixture,
+        });
+      } catch {
+        const result = await runVerification(
+          baseUrl,
+          body,
+          useFixture ? { fixture: useFixture } : undefined,
+        );
+        stored = {
+          id: result.id,
+          repoId: repo.id,
+          scopeMode,
+          baseRef,
+          headRef,
+          startedAt: new Date().toISOString(),
+          result,
+        };
+      }
+
+      const result = stored.result!;
       patchStep("agents", {
         status: "done",
         ms: result.latency.parallel_verification_ms,
@@ -127,16 +169,6 @@ export function RunsPanel({ repo }: { repo: Repository }) {
         detail: `${result.findings.length} findings`,
       });
 
-      const stored: StoredRun = {
-        id: result.id,
-        repoId: repo.id,
-        scopeMode,
-        baseRef,
-        headRef,
-        startedAt: new Date().toISOString(),
-        result,
-      };
-      saveRun(stored);
       setRuns((prev) => [stored, ...prev]);
       setActiveRun(result);
     } catch (e) {
@@ -279,7 +311,7 @@ export function RunsPanel({ repo }: { repo: Repository }) {
         <RunHistory
           runs={runs}
           activeId={activeRun?.id ?? null}
-          onSelect={(r) => setActiveRun(r.result)}
+          onSelect={(r) => r.result && setActiveRun(r.result)}
         />
       </aside>
     </div>

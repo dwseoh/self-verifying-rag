@@ -5,16 +5,7 @@ import type { Repository, StoredRun, WorkspaceSettings } from "./types";
 const SETTINGS_KEY = "trustloop.workspace";
 const runsKey = (repoId: string) => `trustloop.runs.${repoId}`;
 
-export const DEFAULT_REPOS: Repository[] = [
-  {
-    id: "demo",
-    name: "Northstar demo",
-    source: "local",
-    path: "data/demo_repo",
-    defaultBranch: "main",
-    connectedAt: new Date().toISOString(),
-  },
-];
+export const DEFAULT_REPOS: Repository[] = [];
 
 export const DEFAULT_SETTINGS: WorkspaceSettings = {
   cerebrasApiKey: "",

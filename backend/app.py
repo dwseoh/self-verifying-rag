@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.config import ROOT, settings
@@ -10,6 +10,7 @@ from backend.models import VerificationRun, VerifyRequest, AddRuleRequest
 from backend.pipeline.orchestrator import build_context_preview, run_verification
 from backend.storage.json_store import JsonStore
 from backend.storage.run_cache import get_last_run, set_last_run
+from pydantic import BaseModel
 
 app = FastAPI(
     title="TrustLoop",
@@ -68,29 +69,72 @@ async def add_rule(req: AddRuleRequest) -> dict:
     )
 
 
-@app.get("/api/mcp/config")
-async def mcp_config(repo_path: str | None = Query(default="data/demo_repo")) -> dict:
-    """Cursor / Claude Code MCP server snippet for this workspace."""
-    import sys
+@app.get("/api/repos/discover")
+async def discover_repos(
+    q: str = Query(default=""),
+    max_results: int = Query(default=30, le=50),
+) -> dict:
+    from backend.api.discover import discover_git_repos
 
-    py = sys.executable
+    return {"repos": discover_git_repos(query=q, max_results=max_results)}
+
+
+class GitHubCloneRequest(BaseModel):
+    full_name: str
+    repository_id: str
+    default_branch: str = "main"
+    token: str | None = None
+
+
+@app.post("/api/github/clone")
+async def github_clone(req: GitHubCloneRequest) -> dict:
+    from backend.github.clone import clone_github_repo
+
+    token = req.token or settings.github_clone_token or None
+    path = clone_github_repo(
+        req.full_name,
+        req.repository_id,
+        default_branch=req.default_branch,
+        token=token,
+    )
+    return {"path": str(path), "full_name": req.full_name}
+
+
+@app.get("/api/mcp/config")
+async def mcp_config(
+    request: Request,
+    repo_path: str | None = Query(default=None),
+    api_url: str | None = Query(default=None),
+) -> dict:
+    """Cursor MCP snippet — uses install script, no hardcoded dev paths when api_url set."""
+    public_api = (
+        api_url
+        or settings.trustloop_public_api_url
+        or str(request.base_url).rstrip("/")
+    )
+    install_url = f"{public_api.replace('/backend', '')}/api/mcp/install.sh"
+    if repo_path:
+        install_url += f"?repo_path={repo_path}"
+
     cursor_block = {
         "mcpServers": {
             "trustloop": {
-                "command": py,
-                "args": ["-m", "backend.mcp.server"],
-                "cwd": str(ROOT),
-                "env": {},
+                "command": "bash",
+                "args": ["-c", f"curl -fsSL '{install_url}' | bash"],
+                "env": {
+                    "TRUSTLOOP_API_URL": public_api,
+                    "TRUSTLOOP_REPO_PATH": repo_path or "",
+                    "TRUSTLOOP_GIT_REPO": settings.trustloop_git_repo,
+                },
             }
         }
     }
     return {
         "server_name": "trustloop",
-        "command": py,
-        "args": ["-m", "backend.mcp.server"],
-        "cwd": str(ROOT),
-        "install": 'pip install -e ".[mcp]"',
-        "run_script": "./scripts/run-mcp.sh",
+        "mode": "install_script",
+        "install_url": install_url,
+        "install_command": f"curl -fsSL '{install_url}' | bash",
+        "api_url": public_api,
         "default_repo_path": repo_path,
         "tools": [
             {

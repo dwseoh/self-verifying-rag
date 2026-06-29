@@ -9,8 +9,8 @@ type SortKey = "newest" | "oldest" | "findings" | "latency";
 
 function branchLabel(run: StoredRun): string {
   if (run.scopeMode === "branch") {
-    const base = run.baseRef ?? run.result.base_ref;
-    const head = run.headRef ?? run.result.head_ref;
+    const base = run.baseRef ?? run.result?.base_ref ?? "?";
+    const head = run.headRef ?? run.result?.head_ref ?? "?";
     return `${base}…${head}`;
   }
   return titleCase(run.scopeMode);
@@ -20,11 +20,11 @@ function matchesSearch(run: StoredRun, q: string): boolean {
   if (!q.trim()) return true;
   const hay = [
     run.id,
-    run.result.id,
+    run.result?.id ?? "",
     branchLabel(run),
     run.scopeMode,
-    ...run.result.changed_paths,
-    ...run.result.findings.map((f) => f.title),
+    ...(run.result?.changed_paths ?? []),
+    ...(run.result?.findings.map((f) => f.title) ?? []),
   ]
     .join(" ")
     .toLowerCase();
@@ -62,9 +62,9 @@ export function RunHistory({
         case "oldest":
           return a.startedAt.localeCompare(b.startedAt);
         case "findings":
-          return b.result.findings.length - a.result.findings.length;
+          return (b.result?.findings.length ?? 0) - (a.result?.findings.length ?? 0);
         case "latency":
-          return b.result.latency.total_ms - a.result.latency.total_ms;
+          return (b.result?.latency.total_ms ?? 0) - (a.result?.latency.total_ms ?? 0);
         default:
           return b.startedAt.localeCompare(a.startedAt);
       }
@@ -126,35 +126,43 @@ export function RunHistory({
         ) : (
           <ul className="space-y-1">
             {filtered.map((r) => {
-              const active = activeId === r.result.id;
+              const active = activeId === (r.result?.id ?? r.id);
+              const result = r.result;
               return (
                 <li key={r.id}>
                   <button
                     type="button"
                     onClick={() => onSelect(r)}
+                    disabled={!result}
                     className={`w-full rounded-md border px-3 py-2.5 text-left transition ${
                       active ? "border-ink bg-canvas-soft-2" : "border-transparent hover:bg-canvas-soft"
-                    }`}
+                    } ${!result ? "opacity-60" : ""}`}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono text-xs text-ink">{r.result.id}</span>
-                      <Badge
-                        tone={
-                          r.result.risk_level === "high"
-                            ? "high"
-                            : r.result.risk_level === "medium"
-                              ? "medium"
-                              : "low"
-                        }
-                      >
-                        {r.result.risk_level}
-                      </Badge>
+                      <span className="font-mono text-xs text-ink">{result?.id ?? r.id}</span>
+                      {result ? (
+                        <Badge
+                          tone={
+                            result.risk_level === "high"
+                              ? "high"
+                              : result.risk_level === "medium"
+                                ? "medium"
+                                : "low"
+                          }
+                        >
+                          {result.risk_level}
+                        </Badge>
+                      ) : (
+                        <Badge tone="medium">{r.status ?? "failed"}</Badge>
+                      )}
                     </div>
                     <p className="mt-1 text-xs text-body">
-                      {new Date(r.startedAt).toLocaleString()} · {r.result.latency.total_ms}ms
+                      {new Date(r.startedAt).toLocaleString()}
+                      {result ? ` · ${result.latency.total_ms}ms` : ""}
                     </p>
                     <p className="mt-0.5 font-mono text-xs text-mute">
-                      {branchLabel(r)} · {r.result.findings.length} findings
+                      {branchLabel(r)}
+                      {result ? ` · ${result.findings.length} findings` : ""}
                     </p>
                   </button>
                 </li>

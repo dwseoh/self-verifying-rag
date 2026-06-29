@@ -23,8 +23,8 @@ export default function HomePage() {
               <Button size="lg" href="/signup">
                 Start verifying
               </Button>
-              <Button variant="secondary" size="lg" href="/app/repositories">
-                Open dashboard
+              <Button variant="secondary" size="lg" href="/login">
+                Log in
               </Button>
             </div>
           </div>

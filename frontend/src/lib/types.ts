@@ -126,16 +126,21 @@ export interface StoredRun {
   baseRef: string;
   headRef: string;
   startedAt: string;
-  result: VerificationRun;
+  status?: string;
+  result?: VerificationRun;
 }
 
 export interface McpConfigResponse {
   server_name: string;
-  command: string;
-  args: string[];
-  cwd: string;
-  install: string;
-  run_script: string;
+  mode?: string;
+  install_url?: string;
+  install_command?: string;
+  api_url?: string;
+  command?: string;
+  args?: string[];
+  cwd?: string;
+  install?: string;
+  run_script?: string;
   default_repo_path: string;
   tools: Array<{ name: string; description: string }>;
   cursor_config_json: Record<string, unknown>;
