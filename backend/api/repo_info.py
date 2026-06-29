@@ -16,6 +16,7 @@ def repo_index_summary(repo_path: str, corpus_override: str | None = None) -> di
     graph = build_graph_cached(repo)
     corpus_path = discover_corpus_path(repo, corpus_override)
     chunks = load_corpus(corpus_path)
+    using_global_fallback = corpus_path.resolve() == settings.trustloop_corpus_path.resolve()
 
     py_nodes = sum(1 for n in graph.get("nodes", []) if n.endswith(".py"))
     c_nodes = sum(
@@ -37,6 +38,7 @@ def repo_index_summary(repo_path: str, corpus_override: str | None = None) -> di
         "corpus": {
             "path": str(corpus_path),
             "auto_discovered": corpus_override is None,
+            "using_global_fallback": using_global_fallback,
             "section_count": len(chunks),
             "documents": list_corpus_files(corpus_path),
         },

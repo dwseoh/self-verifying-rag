@@ -111,6 +111,7 @@ export interface RepoIndexResponse {
   corpus: {
     path: string;
     auto_discovered: boolean;
+    using_global_fallback?: boolean;
     section_count: number;
     documents: Array<{
       document: string;
