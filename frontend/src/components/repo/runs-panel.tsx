@@ -34,6 +34,8 @@ const INITIAL_STEPS: PipelineStep[] = [
   { id: "compose", label: "Compose findings", status: "pending" },
 ];
 
+const DEFAULT_CHANGED_PATH = "apps/web/checkout.py";
+
 export function RunsPanel({
   repo,
   workspacePath,
@@ -47,11 +49,14 @@ export function RunsPanel({
   const [activeRun, setActiveRun] = useState<VerificationRun | null>(null);
   const [steps, setSteps] = useState<PipelineStep[]>(INITIAL_STEPS);
   const [running, setRunning] = useState(false);
+  const [demoChanging, setDemoChanging] = useState<"clean" | "violation" | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [scopeMode, setScopeMode] = useState<ScopeMode>("branch");
+  const [warning, setWarning] = useState<string | null>(null);
+  const [demoState, setDemoState] = useState<"clean" | "violation" | "unknown">("unknown");
+  const [scopeMode, setScopeMode] = useState<ScopeMode>("paths");
   const [baseRef, setBaseRef] = useState(repo.defaultBranch);
   const [headRef, setHeadRef] = useState("HEAD");
-  const [paths, setPaths] = useState("");
+  const [paths, setPaths] = useState(DEFAULT_CHANGED_PATH);
 
   useEffect(() => {
     fetchRuns(repo.id).then((loaded) => {
@@ -64,31 +69,59 @@ export function RunsPanel({
     setSteps((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
   }
 
+  async function setCheckoutDemoState(mode: "clean" | "violation") {
+    setDemoChanging(mode);
+    setError(null);
+    setWarning(null);
+    try {
+      const res = await fetch("/api/demo/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      setDemoState(mode);
+      setPaths(DEFAULT_CHANGED_PATH);
+      setScopeMode("paths");
+      setWarning(
+        mode === "clean"
+          ? "checkout.py reset to the clean gateway path. Run Verify to show no high-severity findings."
+          : "Boundary violation seeded in checkout.py. Run Verify to show the high-severity finding.",
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to update checkout.py");
+    } finally {
+      setDemoChanging(null);
+    }
+  }
+
   async function startRun(useFixture?: "clean" | "violation") {
     setRunning(true);
     setError(null);
+    setWarning(null);
     setSteps(INITIAL_STEPS.map((s) => ({ ...s, status: "pending" as const })));
 
     const baseUrl = settings.backendUrl;
-    const changed_paths =
+    const requestedChangedPaths =
       scopeMode === "paths" && paths.trim()
         ? paths.split(",").map((p) => p.trim()).filter(Boolean)
         : undefined;
+    let resolvedChangedPaths = requestedChangedPaths;
 
     const body = {
       repo_path: repoPath,
       base_ref: baseRef,
       head_ref: headRef,
       scope_mode: scopeMode,
-      changed_paths,
+      changed_paths: requestedChangedPaths,
     };
 
     try {
       if (!useFixture) {
         const health = await fetchHealth(baseUrl);
         if (health.mock_mode) {
-          throw new Error(
-            "No Cerebras API key on the backend. Add CEREBRAS_API_KEY to backend .env, or use Demo run.",
+          setWarning(
+            "Backend is in mock mode because CEREBRAS_API_KEY is missing. Verify still runs against the live pipeline shape.",
           );
         }
       }
@@ -106,6 +139,9 @@ export function RunsPanel({
       const t1 = performance.now();
       const preview = await fetchPreview(baseUrl, body);
       const changed = (preview.changed_paths as string[]) ?? [];
+      if (!resolvedChangedPaths && changed.length > 0) {
+        resolvedChangedPaths = changed;
+      }
       patchStep("scope", {
         status: "done",
         ms: Math.round(performance.now() - t1),
@@ -135,13 +171,13 @@ export function RunsPanel({
           scopeMode,
           baseRef,
           headRef,
-          changedPaths: changed_paths,
+          changedPaths: resolvedChangedPaths,
           fixture: useFixture,
         });
       } catch {
         const result = await runVerification(
           baseUrl,
-          body,
+          { ...body, changed_paths: resolvedChangedPaths },
           useFixture ? { fixture: useFixture } : undefined,
         );
         stored = {
@@ -195,6 +231,45 @@ export function RunsPanel({
           A <strong>run</strong> indexes the whole repo (cached), then verifies your selected change scope
           against rules + dependency graph. Same pipeline as CI — not a separate “verify” product.
         </p>
+        <div className="mt-4 rounded-lg border border-hairline bg-canvas-soft px-4 py-3 text-sm">
+          <p className="font-medium text-ink">Request preview</p>
+          <p className="mt-1 font-mono text-xs text-body">
+            repo_path: {repoPath} · changed_paths:{" "}
+            {scopeMode === "paths" && paths.trim() ? paths : "resolved from selected scope"}
+          </p>
+        </div>
+
+        <div className="mt-4 rounded-lg border border-hairline bg-canvas px-4 py-3 text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="font-medium text-ink">Demo checkout state</p>
+              <p className="mt-1 text-xs text-body">
+                Reset clean, seed the forbidden import, then verify the same file.
+              </p>
+            </div>
+            <Badge tone={demoState === "violation" ? "high" : demoState === "clean" ? "low" : "info"}>
+              {demoState}
+            </Badge>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setCheckoutDemoState("clean")}
+              disabled={running || demoChanging !== null}
+            >
+              {demoChanging === "clean" ? "Resetting..." : "Reset clean"}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setCheckoutDemoState("violation")}
+              disabled={running || demoChanging !== null}
+            >
+              {demoChanging === "violation" ? "Seeding..." : "Seed violation"}
+            </Button>
+          </div>
+        </div>
 
         <div className="mt-6 grid gap-4 md:grid-cols-2">
           <label className="block text-sm">
@@ -237,12 +312,21 @@ export function RunsPanel({
 
         <div className="mt-6 flex flex-wrap gap-2">
           <Button size="sm" onClick={() => startRun()} disabled={running}>
-            {running ? "Running…" : "Start run"}
+            {running ? "Running…" : "Verify checkout.py"}
           </Button>
           <Button variant="secondary" size="sm" onClick={() => startRun("violation")} disabled={running}>
-            Demo (fixture)
+            Demo violation fixture
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => startRun("clean")} disabled={running}>
+            Demo clean fixture
           </Button>
         </div>
+
+        {warning && (
+          <div className="mt-4 rounded-lg border border-warning/30 bg-warning-soft px-4 py-3 text-sm text-ink">
+            {warning}
+          </div>
+        )}
 
         {error && (
           <div className="mt-4 rounded-lg border border-error/20 bg-error-soft px-4 py-3 text-sm text-error">
@@ -302,7 +386,11 @@ export function RunsPanel({
 
       {!activeRun && !running && runs.length === 0 && (
         <div className="card-elevated rounded-lg bg-canvas p-12 text-center">
-          <p className="text-sm text-body">Start a run to see results here.</p>
+          <p className="text-sm font-medium text-ink">No verification run selected.</p>
+          <p className="mt-2 text-sm text-body">
+            Use Reset clean, Verify checkout.py, then Seed violation and Verify again for the judge
+            demo path.
+          </p>
         </div>
       )}
       </div>
