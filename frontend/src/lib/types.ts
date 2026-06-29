@@ -1,6 +1,6 @@
 export type Severity = "low" | "medium" | "high";
 export type RiskLevel = "low" | "medium" | "high";
-export type ScopeMode = "branch" | "unstaged" | "staged" | "paths";
+export type ScopeMode = "branch" | "unstaged" | "staged" | "paths" | "snapshot";
 export type RepoSource = "local" | "github";
 
 export interface EvidenceSnippet {
@@ -77,6 +77,7 @@ export interface VerifyRequest {
   head_ref?: string;
   trigger?: string;
   scope_mode?: ScopeMode;
+  snapshot_prefix?: string;
   corpus_path?: string;
 }
 

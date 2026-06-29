@@ -13,6 +13,32 @@ export async function getGitHubToken(userId: string): Promise<string | null> {
   return account?.access_token ?? null;
 }
 
+export async function getGitHubConnection(userId: string) {
+  const db = getDb();
+  const [account] = await db
+    .select()
+    .from(accounts)
+    .where(and(eq(accounts.userId, userId), eq(accounts.provider, "github")))
+    .limit(1);
+  if (!account?.access_token) {
+    return { connected: false as const };
+  }
+  return {
+    connected: true as const,
+    providerAccountId: account.providerAccountId,
+    scope: account.scope,
+  };
+}
+
+export async function disconnectGitHub(userId: string): Promise<boolean> {
+  const db = getDb();
+  const result = await db
+    .delete(accounts)
+    .where(and(eq(accounts.userId, userId), eq(accounts.provider, "github")))
+    .returning({ providerAccountId: accounts.providerAccountId });
+  return result.length > 0;
+}
+
 export function octokitForToken(token: string) {
   return new Octokit({ auth: token });
 }

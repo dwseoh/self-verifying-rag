@@ -6,6 +6,7 @@ import type { Repository } from "@/lib/types";
 import {
   createRepository,
   discoverLocalRepos,
+  fetchGitHubConnection,
   fetchGitHubRepos,
   fetchRepositories,
 } from "@/lib/saas-api";
@@ -25,6 +26,8 @@ export default function RepositoriesPage() {
   const [ghRepos, setGhRepos] = useState<
     Array<{ fullName: string; name: string; owner: string; defaultBranch: string }>
   >([]);
+  const [ghConnected, setGhConnected] = useState<boolean | null>(null);
+  const [ghError, setGhError] = useState<string | null>(null);
   const [selectedGh, setSelectedGh] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -42,9 +45,12 @@ export default function RepositoriesPage() {
   }, [search, showAdd, source]);
 
   useEffect(() => {
-    if (showAdd && source === "github") {
-      fetchGitHubRepos().then(setGhRepos);
-    }
+    if (!showAdd || source !== "github") return;
+    fetchGitHubConnection().then((s) => setGhConnected(s.connected));
+    fetchGitHubRepos().then(({ repos, error }) => {
+      setGhRepos(repos);
+      setGhError(error ?? null);
+    });
   }, [showAdd, source]);
 
   async function register() {
@@ -173,16 +179,28 @@ export default function RepositoriesPage() {
             </div>
           ) : (
             <div className="mt-4 space-y-4">
-              <p className="text-xs text-body">
-                Sign in with GitHub to list repositories. Connecting registers a webhook for PR checks
-                when <code className="font-mono">TRUSTLOOP_WEBHOOK_URL</code> is configured on deploy.
-              </p>
+              {ghConnected === false ? (
+                <p className="text-sm text-body">
+                  Connect GitHub in{" "}
+                  <Link href="/app/settings" className="text-link hover:underline">
+                    Settings
+                  </Link>{" "}
+                  to list repositories here. You can stay signed in with email.
+                </p>
+              ) : (
+                <p className="text-xs text-body">
+                  Importing registers a PR webhook when{" "}
+                  <code className="font-mono">TRUSTLOOP_WEBHOOK_URL</code> is configured on deploy.
+                </p>
+              )}
+              {ghError && <p className="text-sm text-error">{ghError}</p>}
               <label className="block text-sm">
                 GitHub repository
                 <select
                   className="mt-1 h-10 w-full rounded-sm border border-hairline px-3 text-sm"
                   value={selectedGh}
                   onChange={(e) => setSelectedGh(e.target.value)}
+                  disabled={ghConnected === false}
                 >
                   <option value="">Select…</option>
                   {ghRepos.map((r) => (

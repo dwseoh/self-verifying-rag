@@ -46,6 +46,7 @@ export async function runVerificationForRepo(opts: {
   baseRef?: string;
   headRef?: string;
   changedPaths?: string[];
+  snapshotPrefix?: string;
   fixture?: "clean" | "violation";
   trigger?: string;
   prNumber?: number;
@@ -82,6 +83,7 @@ export async function runVerificationForRepo(opts: {
         head_ref: headRef,
         scope_mode: scopeMode,
         changed_paths: opts.changedPaths,
+        snapshot_prefix: opts.snapshotPrefix || undefined,
         trigger: opts.trigger ?? "manual",
       }),
     });

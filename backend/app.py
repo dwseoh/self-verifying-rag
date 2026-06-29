@@ -20,7 +20,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -190,11 +190,13 @@ async def verify(
         elif fixture == "violation":
             name = "verification_run_violation.json"
         else:
-            from backend.indexer.graph import detect_boundary_hint, diff_summary_for_paths
+            from backend.indexer.graph import detect_boundary_hint
+            from backend.indexer.scope import resolve_scope
 
             repo = settings.resolve_repo_path(req.repo_path)
-            changed = req.changed_paths or ["apps/web/checkout.py"]
-            diff = diff_summary_for_paths(repo, changed)
+            scope = resolve_scope(repo, req)
+            changed = scope.changed_paths
+            diff = scope.diff_summary
             name = (
                 "verification_run_violation.json"
                 if detect_boundary_hint(diff)

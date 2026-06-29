@@ -9,7 +9,9 @@ export const authConfig = {
     GitHub({
       clientId: process.env.GITHUB_ID,
       clientSecret: process.env.GITHUB_SECRET,
-      allowDangerousEmailAccountLinking: true,
+      allowDangerousEmailAccountLinking:
+        process.env.NODE_ENV !== "production" ||
+        process.env.AUTH_ALLOW_EMAIL_LINKING === "1",
       authorization: {
         params: {
           scope: "read:user user:email repo admin:repo_hook",

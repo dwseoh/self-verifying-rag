@@ -5,7 +5,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from backend.indexer.source_files import is_scoped_file
+from backend.indexer.source_files import SKIP_DIR_NAMES, is_scoped_file
 
 class GitError(RuntimeError):
     pass
@@ -38,6 +38,45 @@ def changed_files(repo: Path, base_ref: str, head_ref: str) -> list[str]:
     out = _run_git(repo, "diff", "--name-only", f"{base_ref}...{head_ref}")
     files = [line.strip() for line in out.splitlines() if line.strip()]
     return [f for f in files if is_scoped_file(Path(f))]
+
+
+def files_at_ref(repo: Path, ref: str) -> list[str]:
+    """Scoped source/doc files present at a git ref (snapshot mode)."""
+    out = _run_git(repo, "ls-tree", "-r", "--name-only", ref)
+    files: list[str] = []
+    for line in out.splitlines():
+        rel = line.strip()
+        if not rel:
+            continue
+        p = Path(rel)
+        if not is_scoped_file(p):
+            continue
+        if any(part in SKIP_DIR_NAMES for part in p.parts):
+            continue
+        files.append(rel)
+    return sorted(files)
+
+
+def read_file_at_ref(repo: Path, ref: str, rel: str, max_chars: int = 8000) -> str:
+    try:
+        content = _run_git(repo, "show", f"{ref}:{rel}")
+        if len(content) > max_chars:
+            return content[:max_chars] + "\n… [truncated]"
+        return content
+    except GitError:
+        return "[unable to read file at ref]"
+
+
+def snapshot_summary(repo: Path, ref: str, paths: list[str]) -> str:
+    header = (
+        f"Snapshot review at {ref} — {len(paths)} scoped file(s). "
+        "Full file contents at this ref (not a diff).\n\n"
+    )
+    parts: list[str] = []
+    for rel in paths:
+        content = read_file_at_ref(repo, ref, rel)
+        parts.append(f"--- {rel} @ {ref} ---\n{content}")
+    return header + "\n\n".join(parts)
 
 
 def working_tree_files(repo: Path, staged: bool = False) -> list[str]:

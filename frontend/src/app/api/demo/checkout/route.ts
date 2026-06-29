@@ -20,12 +20,27 @@ const violation = `
 from packages.payments.client import charge_customer  # noqa: F401
 `;
 
+function demoApiEnabled(): boolean {
+  if (process.env.TRUSTLOOP_ENABLE_DEMO === "1") return true;
+  return process.env.NODE_ENV !== "production";
+}
+
 export async function POST(request: Request) {
+  if (!demoApiEnabled()) {
+    return NextResponse.json({ error: "Demo API disabled in production" }, { status: 403 });
+  }
+
   const body = await request.json().catch(() => ({}));
   const mode = body.mode;
 
   if (mode !== "clean" && mode !== "violation") {
     return NextResponse.json({ error: "mode must be clean or violation" }, { status: 400 });
+  }
+
+  try {
+    await fs.access(checkoutPath);
+  } catch {
+    return NextResponse.json({ error: "Demo checkout file not found on this server" }, { status: 404 });
   }
 
   if (mode === "clean") {

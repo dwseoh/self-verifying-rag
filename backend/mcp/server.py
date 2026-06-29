@@ -39,7 +39,13 @@ async def verify_diff(
     trigger: str = "manual",
 ) -> str:
     """Run TrustLoop verification. Uses TRUSTLOOP_API_URL when set, else local pipeline."""
-    path = repo_path or DEFAULT_REPO or "data/demo_repo"
+    path = repo_path or DEFAULT_REPO
+    if not path:
+        return json.dumps(
+            {
+                "error": "repo_path required — set TRUSTLOOP_REPO_PATH or pass repo_path to verify_diff",
+            }
+        )
     body = {
         "repo_path": path,
         "changed_paths": changed_paths or [],

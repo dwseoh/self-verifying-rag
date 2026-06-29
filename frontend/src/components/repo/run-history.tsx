@@ -13,6 +13,10 @@ function branchLabel(run: StoredRun): string {
     const head = run.headRef ?? run.result?.head_ref ?? "?";
     return `${base}…${head}`;
   }
+  if (run.scopeMode === "snapshot") {
+    const ref = run.headRef ?? run.result?.head_ref ?? "main";
+    return `@${ref}`;
+  }
   return titleCase(run.scopeMode);
 }
 

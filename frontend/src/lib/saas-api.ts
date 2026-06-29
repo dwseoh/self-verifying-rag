@@ -44,20 +44,31 @@ export async function discoverLocalRepos(query: string): Promise<
   return data.repos ?? [];
 }
 
-export async function fetchGitHubRepos(): Promise<
-  Array<{
+export async function fetchGitHubRepos(): Promise<{
+  repos: Array<{
     id: number;
     fullName: string;
     name: string;
     owner: string;
     defaultBranch: string;
     htmlUrl: string;
-  }>
-> {
+  }>;
+  error?: string;
+}> {
   const res = await fetch("/api/github/repos", { cache: "no-store" });
-  if (!res.ok) return [];
+  if (!res.ok) return { repos: [], error: "Failed to load GitHub repositories" };
   const data = await res.json();
-  return data.repos ?? [];
+  return { repos: data.repos ?? [], error: data.error };
+}
+
+export async function fetchGitHubConnection(): Promise<{
+  oauthConfigured: boolean;
+  connected: boolean;
+  error?: string;
+}> {
+  const res = await fetch("/api/user/github-connection", { cache: "no-store" });
+  if (!res.ok) return { oauthConfigured: false, connected: false };
+  return res.json();
 }
 
 export async function fetchRuns(repositoryId: string): Promise<StoredRun[]> {

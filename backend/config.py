@@ -31,8 +31,10 @@ class Settings(BaseSettings):
     trustloop_clones_path: Path = ROOT / "data" / "clones"
     trustloop_allow_absolute_paths: bool = True
     trustloop_public_api_url: str = ""
-    trustloop_git_repo: str = "https://github.com/trustloop/trustloop.git"
+    trustloop_git_repo: str = ""
+    trustloop_cors_origins: str = ""
     github_clone_token: str = ""
+    trustloop_snapshot_max_files: int = 80
 
     @field_validator("trustloop_mock", "trustloop_fixture_api", "trustloop_allow_absolute_paths", mode="before")
     @classmethod
@@ -43,20 +45,28 @@ class Settings(BaseSettings):
     def use_mock(self) -> bool:
         return self.trustloop_mock or not self.cerebras_api_key
 
+    def cors_origins(self) -> list[str]:
+        raw = self.trustloop_cors_origins.strip()
+        if raw:
+            return [part.strip() for part in raw.split(",") if part.strip()]
+        return ["*"]
+
     def discovery_roots(self) -> list[Path]:
         home = Path.home()
-        candidates = [
-            home / "Documents" / "Repositories",
-            home / "Documents",
-            home / "Projects",
-            home / "dev",
-            home / "code",
-            ROOT,
-        ]
+        candidates: list[Path] = []
         extra = os.environ.get("TRUSTLOOP_DISCOVERY_ROOTS", "")
         for part in extra.split(":"):
             if part.strip():
-                candidates.insert(0, Path(part.strip()))
+                candidates.append(Path(part.strip()))
+        candidates.extend(
+            [
+                home / "Projects",
+                home / "dev",
+                home / "code",
+                home / "src",
+                ROOT,
+            ]
+        )
         out: list[Path] = []
         seen: set[str] = set()
         for p in candidates:

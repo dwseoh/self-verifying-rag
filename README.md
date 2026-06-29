@@ -62,6 +62,9 @@ Open http://localhost:5173 — sign up, add a local git repo path, start a run.
 | GitHub sign-in / import | `GITHUB_ID`, `GITHUB_SECRET` in `frontend/.env.local` |
 | PR webhooks | `GITHUB_WEBHOOK_SECRET`, `TRUSTLOOP_WEBHOOK_URL` |
 | Live inference | `CEREBRAS_API_KEY` in `.env` (remove `TRUSTLOOP_MOCK`) |
+| Production CORS | `TRUSTLOOP_CORS_ORIGINS` in `.env` (comma-separated) |
+| Local repo discovery | `TRUSTLOOP_DISCOVERY_ROOTS` in `.env` (colon-separated) |
+| MCP install clone | `TRUSTLOOP_GIT_REPO` in `frontend/.env.local` or root `.env` |
 
 ## Docs
 

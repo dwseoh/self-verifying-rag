@@ -25,6 +25,7 @@ import {
   FindingsPanel,
   SummaryGrid,
 } from "@/components/verify/panels";
+import { isNorthstarDemoRepo } from "@/lib/demo";
 
 const INITIAL_STEPS: PipelineStep[] = [
   { id: "index", label: "Index repository", status: "pending" },
@@ -34,7 +35,7 @@ const INITIAL_STEPS: PipelineStep[] = [
   { id: "compose", label: "Compose findings", status: "pending" },
 ];
 
-const DEFAULT_CHANGED_PATH = "apps/web/checkout.py";
+const DEMO_CHECKOUT_PATH = "apps/web/checkout.py";
 
 export function RunsPanel({
   repo,
@@ -45,6 +46,7 @@ export function RunsPanel({
 }) {
   const settings = loadSettings();
   const repoPath = workspacePath || repo.path;
+  const isDemoRepo = isNorthstarDemoRepo(repoPath);
   const [runs, setRuns] = useState<StoredRun[]>([]);
   const [activeRun, setActiveRun] = useState<VerificationRun | null>(null);
   const [steps, setSteps] = useState<PipelineStep[]>(INITIAL_STEPS);
@@ -53,10 +55,16 @@ export function RunsPanel({
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [demoState, setDemoState] = useState<"clean" | "violation" | "unknown">("unknown");
-  const [scopeMode, setScopeMode] = useState<ScopeMode>("paths");
+  const [scopeMode, setScopeMode] = useState<ScopeMode>("branch");
   const [baseRef, setBaseRef] = useState(repo.defaultBranch);
   const [headRef, setHeadRef] = useState("HEAD");
-  const [paths, setPaths] = useState(DEFAULT_CHANGED_PATH);
+  const [paths, setPaths] = useState("");
+  const [snapshotPrefix, setSnapshotPrefix] = useState("src/");
+  const [scopePreview, setScopePreview] = useState<{
+    fileCount: number | null;
+    warning: string | null;
+    loading: boolean;
+  }>({ fileCount: null, warning: null, loading: false });
 
   useEffect(() => {
     fetchRuns(repo.id).then((loaded) => {
@@ -64,6 +72,44 @@ export function RunsPanel({
       if (loaded[0]?.result) setActiveRun(loaded[0].result);
     });
   }, [repo.id]);
+
+  useEffect(() => {
+    if (scopeMode === "snapshot") {
+      setHeadRef((current) => (current === "HEAD" ? repo.defaultBranch || "main" : current));
+    }
+  }, [scopeMode, repo.defaultBranch]);
+
+  useEffect(() => {
+    if (scopeMode === "paths" && !paths.trim()) {
+      setScopePreview({ fileCount: null, warning: null, loading: false });
+      return;
+    }
+    const backend = settings.backendUrl;
+    const t = setTimeout(() => {
+      setScopePreview((p) => ({ ...p, loading: true }));
+      fetchPreview(backend, {
+        repo_path: repoPath,
+        base_ref: baseRef,
+        head_ref: headRef,
+        scope_mode: scopeMode,
+        snapshot_prefix: scopeMode === "snapshot" && snapshotPrefix.trim() ? snapshotPrefix.trim() : undefined,
+        changed_paths:
+          scopeMode === "paths" && paths.trim()
+            ? paths.split(",").map((p) => p.trim()).filter(Boolean)
+            : undefined,
+      })
+        .then((preview) => {
+          const changed = (preview.changed_paths as string[]) ?? [];
+          setScopePreview({
+            fileCount: changed.length,
+            warning: (preview.warning as string) ?? null,
+            loading: false,
+          });
+        })
+        .catch(() => setScopePreview({ fileCount: null, warning: null, loading: false }));
+    }, 400);
+    return () => clearTimeout(t);
+  }, [scopeMode, baseRef, headRef, paths, snapshotPrefix, repoPath, settings.backendUrl]);
 
   function patchStep(id: PipelineStep["id"], patch: Partial<PipelineStep>) {
     setSteps((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
@@ -81,7 +127,7 @@ export function RunsPanel({
       });
       if (!res.ok) throw new Error(await res.text());
       setDemoState(mode);
-      setPaths(DEFAULT_CHANGED_PATH);
+      setPaths(DEMO_CHECKOUT_PATH);
       setScopeMode("paths");
       setWarning(
         mode === "clean"
@@ -113,6 +159,7 @@ export function RunsPanel({
       base_ref: baseRef,
       head_ref: headRef,
       scope_mode: scopeMode,
+      snapshot_prefix: scopeMode === "snapshot" && snapshotPrefix.trim() ? snapshotPrefix.trim() : undefined,
       changed_paths: requestedChangedPaths,
     };
 
@@ -148,7 +195,7 @@ export function RunsPanel({
         detail: `${changed.length} file(s) in scope`,
       });
       if (preview.warning) {
-        setError(String(preview.warning));
+        setWarning(String(preview.warning));
       }
 
       patchStep("rules", { status: "running" });
@@ -172,6 +219,7 @@ export function RunsPanel({
           baseRef,
           headRef,
           changedPaths: resolvedChangedPaths,
+          snapshotPrefix: scopeMode === "snapshot" ? snapshotPrefix.trim() : undefined,
           fixture: useFixture,
         });
       } catch {
@@ -232,13 +280,43 @@ export function RunsPanel({
           against rules + dependency graph. Same pipeline as CI — not a separate “verify” product.
         </p>
         <div className="mt-4 rounded-lg border border-hairline bg-canvas-soft px-4 py-3 text-sm">
-          <p className="font-medium text-ink">Request preview</p>
-          <p className="mt-1 font-mono text-xs text-body">
-            repo_path: {repoPath} · changed_paths:{" "}
-            {scopeMode === "paths" && paths.trim() ? paths : "resolved from selected scope"}
+          <p className="font-medium text-ink">Scope preview</p>
+          <p className="mt-1 text-xs text-body">
+            Dry-run of what the backend will verify — calls{" "}
+            <code className="font-mono">/api/verify/preview</code> (no LLM). Updates when you change scope.
           </p>
+          <dl className="mt-3 space-y-1 font-mono text-xs text-body">
+            <div className="flex flex-wrap gap-x-2">
+              <dt className="text-mute">mode</dt>
+              <dd>
+                {scopeMode === "branch" && `branch diff · ${baseRef}…${headRef}`}
+                {scopeMode === "snapshot" && `snapshot · @${headRef}${snapshotPrefix.trim() ? ` · ${snapshotPrefix.trim()}` : ""}`}
+                {scopeMode === "unstaged" && "unstaged working tree"}
+                {scopeMode === "staged" && "staged index"}
+                {scopeMode === "paths" && (paths.trim() ? `paths · ${paths}` : "paths · (none yet)")}
+              </dd>
+            </div>
+            <div className="flex flex-wrap gap-x-2">
+              <dt className="text-mute">repo</dt>
+              <dd className="break-all">{repoPath}</dd>
+            </div>
+            <div className="flex flex-wrap gap-x-2">
+              <dt className="text-mute">files</dt>
+              <dd>
+                {scopePreview.loading
+                  ? "resolving…"
+                  : scopePreview.fileCount != null
+                    ? `${scopePreview.fileCount} in scope`
+                    : "—"}
+              </dd>
+            </div>
+          </dl>
+          {scopePreview.warning && (
+            <p className="mt-2 text-xs text-warning">{scopePreview.warning}</p>
+          )}
         </div>
 
+        {isDemoRepo && (
         <div className="mt-4 rounded-lg border border-hairline bg-canvas px-4 py-3 text-sm">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -270,6 +348,7 @@ export function RunsPanel({
             </Button>
           </div>
         </div>
+        )}
 
         <div className="mt-6 grid gap-4 md:grid-cols-2">
           <label className="block text-sm">
@@ -280,6 +359,7 @@ export function RunsPanel({
               onChange={(e) => setScopeMode(e.target.value as ScopeMode)}
             >
               <option value="branch">Branch diff (base…head)</option>
+              <option value="snapshot">Snapshot (review ref as-is)</option>
               <option value="unstaged">Unstaged working tree</option>
               <option value="staged">Staged changes</option>
               <option value="paths">Specific files</option>
@@ -297,12 +377,38 @@ export function RunsPanel({
               </label>
             </>
           )}
+          {scopeMode === "snapshot" && (
+            <>
+              <label className="block text-sm">
+                <span className="text-body">Git ref to review</span>
+                <input
+                  className="mt-1 h-10 w-full rounded-sm border border-hairline px-3 font-mono text-sm"
+                  value={headRef}
+                  onChange={(e) => setHeadRef(e.target.value)}
+                  placeholder="main"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="text-body">Path prefix (optional)</span>
+                <input
+                  className="mt-1 h-10 w-full rounded-sm border border-hairline px-3 font-mono text-sm"
+                  value={snapshotPrefix}
+                  onChange={(e) => setSnapshotPrefix(e.target.value)}
+                  placeholder="src/"
+                />
+                <span className="mt-1 block text-xs text-mute">
+                  Only files under this folder (e.g. <code className="font-mono">src/</code>,{" "}
+                  <code className="font-mono">app/</code>). Up to 80 code files prioritized — not all 796 at once.
+                </span>
+              </label>
+            </>
+          )}
           {scopeMode === "paths" && (
             <label className="block text-sm md:col-span-2">
               <span className="text-body">Files (comma-separated)</span>
               <input
                 className="mt-1 h-10 w-full rounded-sm border border-hairline px-3 font-mono text-sm"
-                placeholder="apps/web/checkout.py"
+                placeholder="src/app/page.tsx, lib/api.ts"
                 value={paths}
                 onChange={(e) => setPaths(e.target.value)}
               />
@@ -312,14 +418,18 @@ export function RunsPanel({
 
         <div className="mt-6 flex flex-wrap gap-2">
           <Button size="sm" onClick={() => startRun()} disabled={running}>
-            {running ? "Running…" : "Verify checkout.py"}
+            {running ? "Running…" : "Start verification"}
           </Button>
-          <Button variant="secondary" size="sm" onClick={() => startRun("violation")} disabled={running}>
-            Demo violation fixture
-          </Button>
-          <Button variant="secondary" size="sm" onClick={() => startRun("clean")} disabled={running}>
-            Demo clean fixture
-          </Button>
+          {isDemoRepo && (
+            <>
+              <Button variant="secondary" size="sm" onClick={() => startRun("violation")} disabled={running}>
+                Demo violation fixture
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => startRun("clean")} disabled={running}>
+                Demo clean fixture
+              </Button>
+            </>
+          )}
         </div>
 
         {warning && (
@@ -388,8 +498,9 @@ export function RunsPanel({
         <div className="card-elevated rounded-lg bg-canvas p-12 text-center">
           <p className="text-sm font-medium text-ink">No verification run selected.</p>
           <p className="mt-2 text-sm text-body">
-            Use Reset clean, Verify checkout.py, then Seed violation and Verify again for the judge
-            demo path.
+            {isDemoRepo
+              ? "Use Reset clean, Start verification, then Seed violation and verify again for the judge demo path."
+              : "Choose a change scope (branch diff is default) and start a verification run."}
           </p>
         </div>
       )}

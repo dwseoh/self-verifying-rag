@@ -9,6 +9,7 @@ export async function GET(request: Request) {
     "http://localhost:8000";
   const repoPath = searchParams.get("repo_path") ?? "";
   const installDir = "${HOME}/.local/share/trustloop";
+  const gitRepo = process.env.TRUSTLOOP_GIT_REPO?.trim() ?? "";
 
   const script = `#!/usr/bin/env bash
 set -euo pipefail
@@ -16,11 +17,16 @@ set -euo pipefail
 TRUSTLOOP_API_URL="${apiUrl.replace(/"/g, '\\"')}"
 TRUSTLOOP_REPO_PATH="${repoPath.replace(/"/g, '\\"')}"
 TRUSTLOOP_INSTALL_DIR="${installDir}"
-TRUSTLOOP_REPO="${process.env.TRUSTLOOP_GIT_REPO ?? "https://github.com/trustloop/trustloop.git"}"
+TRUSTLOOP_REPO="${gitRepo.replace(/"/g, '\\"')}"
 
 echo "TrustLoop MCP installer"
 echo "  API:  \$TRUSTLOOP_API_URL"
 echo "  Dir:  \$TRUSTLOOP_INSTALL_DIR"
+
+if [ -z "\$TRUSTLOOP_REPO" ]; then
+  echo "Set TRUSTLOOP_GIT_REPO on the server (or export before running this script)."
+  exit 1
+fi
 
 mkdir -p "\$TRUSTLOOP_INSTALL_DIR"
 if [ ! -d "\$TRUSTLOOP_INSTALL_DIR/.git" ]; then

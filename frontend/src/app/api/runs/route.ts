@@ -77,6 +77,7 @@ export async function POST(request: Request) {
     baseRef: body.baseRef ?? repo.defaultBranch,
     headRef: body.headRef ?? "HEAD",
     changedPaths: body.changedPaths,
+    snapshotPrefix: body.snapshotPrefix?.toString(),
     fixture: body.fixture,
     trigger: body.trigger ?? "manual",
     prNumber: body.prNumber,

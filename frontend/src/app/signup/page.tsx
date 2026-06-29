@@ -52,7 +52,7 @@ export default function SignupPage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="mt-1 h-10 w-full rounded-sm border border-hairline px-3 text-sm"
-              placeholder="Jamie"
+              placeholder="Your name"
             />
           </div>
           <div>
