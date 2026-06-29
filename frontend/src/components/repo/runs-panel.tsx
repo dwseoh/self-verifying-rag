@@ -34,6 +34,8 @@ const INITIAL_STEPS: PipelineStep[] = [
   { id: "compose", label: "Compose findings", status: "pending" },
 ];
 
+const DEFAULT_CHANGED_PATH = "apps/web/checkout.py";
+
 export function RunsPanel({
   repo,
   workspacePath,
@@ -48,10 +50,11 @@ export function RunsPanel({
   const [steps, setSteps] = useState<PipelineStep[]>(INITIAL_STEPS);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [scopeMode, setScopeMode] = useState<ScopeMode>("branch");
+  const [warning, setWarning] = useState<string | null>(null);
+  const [scopeMode, setScopeMode] = useState<ScopeMode>("paths");
   const [baseRef, setBaseRef] = useState(repo.defaultBranch);
   const [headRef, setHeadRef] = useState("HEAD");
-  const [paths, setPaths] = useState("");
+  const [paths, setPaths] = useState(DEFAULT_CHANGED_PATH);
 
   useEffect(() => {
     fetchRuns(repo.id).then((loaded) => {
@@ -67,28 +70,30 @@ export function RunsPanel({
   async function startRun(useFixture?: "clean" | "violation") {
     setRunning(true);
     setError(null);
+    setWarning(null);
     setSteps(INITIAL_STEPS.map((s) => ({ ...s, status: "pending" as const })));
 
     const baseUrl = settings.backendUrl;
-    const changed_paths =
+    const requestedChangedPaths =
       scopeMode === "paths" && paths.trim()
         ? paths.split(",").map((p) => p.trim()).filter(Boolean)
         : undefined;
+    let resolvedChangedPaths = requestedChangedPaths;
 
     const body = {
       repo_path: repoPath,
       base_ref: baseRef,
       head_ref: headRef,
       scope_mode: scopeMode,
-      changed_paths,
+      changed_paths: requestedChangedPaths,
     };
 
     try {
       if (!useFixture) {
         const health = await fetchHealth(baseUrl);
         if (health.mock_mode) {
-          throw new Error(
-            "No Cerebras API key on the backend. Add CEREBRAS_API_KEY to backend .env, or use Demo run.",
+          setWarning(
+            "Backend is in mock mode because CEREBRAS_API_KEY is missing. Verify still runs against the live pipeline shape.",
           );
         }
       }
@@ -106,6 +111,9 @@ export function RunsPanel({
       const t1 = performance.now();
       const preview = await fetchPreview(baseUrl, body);
       const changed = (preview.changed_paths as string[]) ?? [];
+      if (!resolvedChangedPaths && changed.length > 0) {
+        resolvedChangedPaths = changed;
+      }
       patchStep("scope", {
         status: "done",
         ms: Math.round(performance.now() - t1),
@@ -135,13 +143,13 @@ export function RunsPanel({
           scopeMode,
           baseRef,
           headRef,
-          changedPaths: changed_paths,
+          changedPaths: resolvedChangedPaths,
           fixture: useFixture,
         });
       } catch {
         const result = await runVerification(
           baseUrl,
-          body,
+          { ...body, changed_paths: resolvedChangedPaths },
           useFixture ? { fixture: useFixture } : undefined,
         );
         stored = {
@@ -195,6 +203,13 @@ export function RunsPanel({
           A <strong>run</strong> indexes the whole repo (cached), then verifies your selected change scope
           against rules + dependency graph. Same pipeline as CI — not a separate “verify” product.
         </p>
+        <div className="mt-4 rounded-lg border border-hairline bg-canvas-soft px-4 py-3 text-sm">
+          <p className="font-medium text-ink">Request preview</p>
+          <p className="mt-1 font-mono text-xs text-body">
+            repo_path: {repoPath} · changed_paths:{" "}
+            {scopeMode === "paths" && paths.trim() ? paths : "resolved from selected scope"}
+          </p>
+        </div>
 
         <div className="mt-6 grid gap-4 md:grid-cols-2">
           <label className="block text-sm">
@@ -237,12 +252,21 @@ export function RunsPanel({
 
         <div className="mt-6 flex flex-wrap gap-2">
           <Button size="sm" onClick={() => startRun()} disabled={running}>
-            {running ? "Running…" : "Start run"}
+            {running ? "Running…" : "Verify checkout.py"}
           </Button>
           <Button variant="secondary" size="sm" onClick={() => startRun("violation")} disabled={running}>
-            Demo (fixture)
+            Demo violation fixture
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => startRun("clean")} disabled={running}>
+            Demo clean fixture
           </Button>
         </div>
+
+        {warning && (
+          <div className="mt-4 rounded-lg border border-warning/30 bg-warning-soft px-4 py-3 text-sm text-ink">
+            {warning}
+          </div>
+        )}
 
         {error && (
           <div className="mt-4 rounded-lg border border-error/20 bg-error-soft px-4 py-3 text-sm text-error">
