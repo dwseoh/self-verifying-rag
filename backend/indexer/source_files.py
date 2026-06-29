@@ -8,6 +8,20 @@ from pathlib import Path
 
 SOURCE_SUFFIXES = frozenset({".py", ".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".hxx"})
 
+# Files included in verify scope (git diff / working tree). Wider than graph index.
+SCOPE_SUFFIXES = SOURCE_SUFFIXES | frozenset(
+    {".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".css", ".scss", ".md"}
+)
+
+
+def is_source_file(path: Path) -> bool:
+    return path.suffix.lower() in SOURCE_SUFFIXES
+
+
+def is_scoped_file(path: Path) -> bool:
+    return path.suffix.lower() in SCOPE_SUFFIXES
+
+
 SKIP_DIR_NAMES = frozenset(
     {".git", "build", "node_modules", ".venv", "__pycache__", "dist", ".pytest_cache"}
 )
@@ -16,10 +30,6 @@ _INCLUDE_RE = re.compile(
     r'^\s*#\s*include\s+([<"])([^>"]+)[>"]',
     re.MULTILINE,
 )
-
-
-def is_source_file(path: Path) -> bool:
-    return path.suffix.lower() in SOURCE_SUFFIXES
 
 
 def iter_source_files(repo: Path) -> list[Path]:

@@ -5,7 +5,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from backend.indexer.source_files import is_source_file
+from backend.indexer.source_files import is_scoped_file
 
 class GitError(RuntimeError):
     pass
@@ -37,7 +37,7 @@ def changed_files(repo: Path, base_ref: str, head_ref: str) -> list[str]:
     """Source files changed between base and head (Python + C/C++)."""
     out = _run_git(repo, "diff", "--name-only", f"{base_ref}...{head_ref}")
     files = [line.strip() for line in out.splitlines() if line.strip()]
-    return [f for f in files if is_source_file(Path(f))]
+    return [f for f in files if is_scoped_file(Path(f))]
 
 
 def working_tree_files(repo: Path, staged: bool = False) -> list[str]:
@@ -47,7 +47,7 @@ def working_tree_files(repo: Path, staged: bool = False) -> list[str]:
         args.insert(1, "--cached")
     out = _run_git(repo, *args)
     files = [line.strip() for line in out.splitlines() if line.strip()]
-    return [f for f in files if is_source_file(Path(f))]
+    return [f for f in files if is_scoped_file(Path(f))]
 
 
 def working_tree_diff(repo: Path, paths: list[str] | None = None, staged: bool = False) -> str:
