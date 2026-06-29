@@ -23,7 +23,9 @@ from backend.models import (
     VerifyRequest,
 )
 from backend.pipeline import composer
+from backend.health.code_health import analyze_code_health, health_to_findings
 from backend.retrieval.corpus_discovery import discover_corpus_path
+from backend.retrieval.repo_knowledge import load_repo_knowledge, merge_knowledge_chunks
 from backend.retrieval.retriever import corpus_relevance, corpus_weak, load_corpus, retrieve
 from backend.scoring import confidence as confidence_scoring
 
@@ -45,10 +47,11 @@ async def build_context_preview(req: VerifyRequest) -> dict:
     affected = graph_indexer.affected_paths(scope.changed_paths, g)
     excerpt = graph_indexer.graph_excerpt(g, affected)
     corpus_root = discover_corpus_path(repo, req.corpus_path)
+    all_chunks = merge_knowledge_chunks(load_corpus(corpus_root), load_repo_knowledge(repo))
     chunks = retrieve(
         f"{scope.diff_summary}\n{' '.join(scope.changed_paths)}",
-        load_corpus(corpus_root),
-        top_k=5,
+        all_chunks,
+        top_k=8,
         changed_paths=scope.changed_paths,
     )
     warnings: list[str] = []
@@ -71,6 +74,7 @@ async def build_context_preview(req: VerifyRequest) -> dict:
         "corpus_path": str(corpus_root),
         "corpus_auto_discovered": req.corpus_path is None,
         "warnings": warnings,
+        "code_health_preview": analyze_code_health(repo, scope.changed_paths)[:10],
         "agents_planned": len(AGENT_RUNNERS),
         "llm_mode": "mock" if settings.use_mock else "cerebras",
         "graph_stats": {
@@ -96,8 +100,9 @@ async def run_verification(req: VerifyRequest) -> VerificationRun:
 
     t_ret = time.perf_counter()
     corpus_root = discover_corpus_path(repo, req.corpus_path)
+    all_chunks = merge_knowledge_chunks(load_corpus(corpus_root), load_repo_knowledge(repo))
     query = f"{diff}\n{' '.join(changed)}"
-    chunks = retrieve(query, load_corpus(corpus_root), top_k=5, changed_paths=changed)
+    chunks = retrieve(query, all_chunks, top_k=8, changed_paths=changed)
     max_corpus_score = corpus_relevance(chunks)
     weak_corpus = corpus_weak(chunks)
     retrieval_ms = int((time.perf_counter() - t_ret) * 1000)
@@ -151,6 +156,7 @@ async def run_verification(req: VerifyRequest) -> VerificationRun:
 
     t_comp = time.perf_counter()
     findings = composer.compose_findings(agent_results, chunks)
+    findings.extend(health_to_findings(analyze_code_health(repo, changed)))
     findings = confidence_scoring.score_findings(findings, verification_incomplete)
     composition_ms = int((time.perf_counter() - t_comp) * 1000)
 

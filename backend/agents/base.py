@@ -47,6 +47,7 @@ Corpus chunks:
 {_format_chunks(ctx.corpus_chunks)}
 
 If no issue, return {{"findings": []}}.
+Each finding must include recommended_fix: concrete steps to resolve the issue.
 """
     has_violation = detect_boundary_hint(ctx.diff_summary)
     try:

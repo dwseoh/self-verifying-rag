@@ -112,10 +112,23 @@ export interface RepoIndexResponse {
     path: string;
     auto_discovered: boolean;
     using_global_fallback?: boolean;
+    formal_section_count?: number;
+    repo_knowledge_files?: number;
+    knowledge_sources?: Array<{ path: string; citation_id: string; size_bytes: number }>;
     section_count: number;
     documents: Array<{
       document: string;
       sections: Array<{ citation_id: string; section_title: string; text_preview: string }>;
+    }>;
+  };
+  code_health?: {
+    finding_count: number;
+    findings: Array<{
+      id: string;
+      severity: string;
+      title: string;
+      explanation: string;
+      recommended_fix?: string;
     }>;
   };
 }

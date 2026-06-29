@@ -60,6 +60,25 @@ export function RepoOverview({ repoPath }: { repoPath: string }) {
         )}
       </article>
 
+      {index.code_health && index.code_health.finding_count > 0 && (
+        <article className="card-float rounded-lg bg-canvas p-6">
+          <p className="font-mono text-xs uppercase text-mute">Code health</p>
+          <h3 className="mt-1 text-lg font-semibold">
+            {index.code_health.finding_count} signal(s) in repo
+          </h3>
+          <ul className="mt-4 space-y-2 text-sm text-body">
+            {index.code_health.findings.map((f) => (
+              <li key={f.id} className="rounded-md border border-hairline px-3 py-2">
+                <span className="font-medium text-ink">{f.title}</span>
+                {f.recommended_fix && (
+                  <p className="mt-1 text-xs text-mute">How to fix: {f.recommended_fix}</p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </article>
+      )}
+
       <article className="card-elevated rounded-lg bg-[#0a0a0a] p-6 font-mono text-xs leading-6 text-on-primary/90">
         <p className="text-on-primary/50">How indexing works</p>
         <p className="mt-2">
