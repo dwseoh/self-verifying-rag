@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.config import ROOT, settings
 from backend.llm.cerebras_client import check_llm_connection
-from backend.models import VerificationRun, VerifyRequest
+from backend.models import VerificationRun, VerifyRequest, AddRuleRequest
 from backend.pipeline.orchestrator import build_context_preview, run_verification
 from backend.storage.json_store import JsonStore
 from backend.storage.run_cache import get_last_run, set_last_run
@@ -42,6 +42,66 @@ async def health() -> dict:
         "fixture_api": settings.trustloop_fixture_api,
         "model": settings.cerebras_model,
         "repo_path": str(settings.trustloop_repo_path),
+    }
+
+
+@app.get("/api/repos/index")
+async def repo_index(repo_path: str = Query(...), corpus_path: str | None = None) -> dict:
+    """Graph ingestion stats + auto-discovered corpus for dashboard."""
+    from backend.api.repo_info import repo_index_summary
+
+    return repo_index_summary(repo_path, corpus_path)
+
+
+@app.post("/api/repos/rules")
+async def add_rule(req: AddRuleRequest) -> dict:
+    """Append a rule section to the repo-local corpus (docs/trustloop_corpus/)."""
+    from backend.retrieval.corpus_discovery import append_rule
+
+    repo = settings.resolve_repo_path(req.repo_path)
+    return append_rule(
+        repo,
+        citation_id=req.citation_id,
+        section_title=req.section_title,
+        body=req.body,
+        filename=req.filename,
+    )
+
+
+@app.get("/api/mcp/config")
+async def mcp_config(repo_path: str | None = Query(default="data/demo_repo")) -> dict:
+    """Cursor / Claude Code MCP server snippet for this workspace."""
+    import sys
+
+    py = sys.executable
+    cursor_block = {
+        "mcpServers": {
+            "trustloop": {
+                "command": py,
+                "args": ["-m", "backend.mcp.server"],
+                "cwd": str(ROOT),
+                "env": {},
+            }
+        }
+    }
+    return {
+        "server_name": "trustloop",
+        "command": py,
+        "args": ["-m", "backend.mcp.server"],
+        "cwd": str(ROOT),
+        "install": 'pip install -e ".[mcp]"',
+        "run_script": "./scripts/run-mcp.sh",
+        "default_repo_path": repo_path,
+        "tools": [
+            {
+                "name": "verify_diff",
+                "description": "Run verification on repo_path with optional changed_paths and git refs",
+            },
+            {"name": "get_findings", "description": "Findings from the last verify_diff call"},
+            {"name": "search_engineering_corpus", "description": "Keyword search over rules corpus"},
+        ],
+        "cursor_config_json": cursor_block,
+        "cursor_config_path": "~/.cursor/mcp.json",
     }
 
 

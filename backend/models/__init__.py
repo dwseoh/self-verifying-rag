@@ -1,4 +1,5 @@
 from backend.models.verification import (
+    AddRuleRequest,
     AgentResult,
     AgentTimelineEntry,
     CorpusChunk,
@@ -13,6 +14,7 @@ from backend.models.verification import (
 )
 
 __all__ = [
+    "AddRuleRequest",
     "AgentResult",
     "AgentTimelineEntry",
     "CorpusChunk",

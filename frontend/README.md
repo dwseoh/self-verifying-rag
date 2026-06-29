@@ -1,55 +1,48 @@
-# Frontend (Person B)
+# TrustLoop Frontend
 
-MVP dashboard — not a chat UI.
+Repo-centric SaaS dashboard (Vercel-inspired design).
 
-## Setup
-
-Phase 0 uses a static fixture dashboard so B can move without waiting on A's API.
+## Run
 
 ```bash
-cd frontend
-python -m http.server 5173
+# Backend
+uvicorn backend.app:app --reload --port 8000
+
+# Frontend
+cd frontend && npm install && npm run dev
 ```
 
-Then open `http://localhost:5173`.
+Open http://localhost:5173
 
-## Later setup (suggested: Vite + React + TypeScript)
+## Flow
 
-```bash
-cd frontend
-npm create vite@latest . -- --template react-ts
-npm install
-```
+1. **Repositories** — register a local path (`data/demo_repo`, `data/orbital`, …)
+2. **Click a repo** — opens project dashboard (like Vercel)
+3. **Runs tab** — start a run (indexes whole repo, verifies selected scope)
+4. **Index tab** — graph ingestion stats
+5. **Rules tab** — auto-detected markdown rules from `docs/trustloop_corpus/` in the repo
+6. **Settings** — Save & test backend / Cerebras connection
 
-Copy types from `fixtures/verification_run_violation.json` into `src/types/verification.ts`.
+## Verify vs Runs
 
-## MVP screens
+There is only **Runs**. A run = index whole repo (cached) → resolve diff scope → load rules → parallel agents → findings.
 
-1. **Verify** button → `POST http://localhost:8000/api/verify`
-2. Findings list (severity badge, confidence, title)
-3. Agent timeline (parallel latency bars)
-4. Citation evidence panel
+## Corpus
 
-### Request body (MVP)
+No manual corpus path. Backend auto-discovers, in order:
 
-```json
-{
-  "repo_path": "data/demo_repo",
-  "changed_paths": ["apps/web/checkout.py"],
-  "trigger": "manual"
-}
-```
+- `docs/trustloop_corpus/`
+- `docs/engineering_corpus/`
+- `engineering_corpus/`
+- `.trustloop/corpus/`
+- fallback: global `data/engineering_corpus/`
 
-For violation demo, edit `data/demo_repo/apps/web/checkout.py` to add:
+## Routes
 
-```python
-from packages.payments.client import charge_customer
-```
+| Path | Purpose |
+|------|---------|
+| `/app/repositories` | List + register repos |
+| `/app/repos/[id]` | Repo dashboard (Runs / Index / Rules) |
+| `/app/settings` | API + backend config |
 
-Then click Verify again (mock mode detects payments import heuristically).
-
-## Contract
-
-`VerificationRun` shape is defined in `backend/models/verification.py` and `fixtures/`.
-
-See `docs/IMPLEMENTATION.md` for work split.
+Legacy static UI: `frontend/_legacy/`

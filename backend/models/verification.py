@@ -1,6 +1,8 @@
 from enum import Enum
 from typing import Literal
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -76,6 +78,8 @@ class VerifyRequest(BaseModel):
     trigger: TriggerType = TriggerType.MANUAL
     diff_summary: str | None = None
     test_context: str | None = None
+    corpus_path: str | None = None
+    scope_mode: Literal["branch", "unstaged", "staged", "paths"] = "branch"
 
 
 class VerificationRun(BaseModel):
@@ -102,3 +106,11 @@ class AgentResult(BaseModel):
     latency_ms: int = 0
     findings: list[Finding] = Field(default_factory=list)
     error: str | None = None
+
+
+class AddRuleRequest(BaseModel):
+    repo_path: str
+    citation_id: str = Field(min_length=3, max_length=64)
+    section_title: str = Field(min_length=1, max_length=200)
+    body: str = Field(min_length=1)
+    filename: str = "custom_rules.md"

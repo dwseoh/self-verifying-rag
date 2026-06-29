@@ -30,7 +30,7 @@ def resolve_scope(repo: Path, req: VerifyRequest) -> VerifyScope:
     """
     Priority:
     1. req.diff_summary (explicit)
-    2. git diff base_ref...head_ref when repo is a git checkout
+    2. scope_mode: unstaged / staged / branch (git)
     3. req.changed_paths file contents
     4. demo checkout.py only if that file exists in this repo
     """
@@ -38,31 +38,78 @@ def resolve_scope(repo: Path, req: VerifyRequest) -> VerifyScope:
         paths = req.changed_paths or ([_DEMO_DEFAULT] if _default_path(repo) else [])
         return VerifyScope(changed_paths=paths, diff_summary=req.diff_summary, used_git=False)
 
-    if git.is_git_repo(repo) and (req.base_ref or req.head_ref):
+    mode = getattr(req, "scope_mode", "branch") or "branch"
+
+    if git.is_git_repo(repo):
         try:
-            paths = list(req.changed_paths) if req.changed_paths else git.changed_files(repo, req.base_ref, req.head_ref)
-            warning = None
-            if not paths and not req.changed_paths:
-                fallback = _default_path(repo)
-                if fallback:
-                    paths = [fallback]
-                else:
-                    warning = (
-                        f"No changed source files between {req.base_ref}...{req.head_ref}. "
-                        "Pass changed_paths explicitly or compare different refs."
-                    )
+            if mode == "unstaged":
+                paths = list(req.changed_paths) if req.changed_paths else git.working_tree_files(repo, staged=False)
+                if not paths:
                     return VerifyScope(
                         changed_paths=[],
                         diff_summary="",
                         used_git=True,
-                        warning=warning,
+                        warning="No unstaged source changes in working tree.",
                     )
-            diff = git.diff_text(repo, req.base_ref, req.head_ref, paths if req.changed_paths else None)
-            if not diff.strip():
-                diff = diff_summary_for_paths(repo, paths)
-            return VerifyScope(changed_paths=paths, diff_summary=diff, used_git=True, warning=warning)
+                diff = git.working_tree_diff(repo, paths if req.changed_paths else None, staged=False)
+                if not diff.strip():
+                    diff = diff_summary_for_paths(repo, paths)
+                return VerifyScope(changed_paths=paths, diff_summary=diff, used_git=True)
+
+            if mode == "staged":
+                paths = list(req.changed_paths) if req.changed_paths else git.working_tree_files(repo, staged=True)
+                if not paths:
+                    return VerifyScope(
+                        changed_paths=[],
+                        diff_summary="",
+                        used_git=True,
+                        warning="No staged source changes.",
+                    )
+                diff = git.working_tree_diff(repo, paths if req.changed_paths else None, staged=True)
+                if not diff.strip():
+                    diff = diff_summary_for_paths(repo, paths)
+                return VerifyScope(changed_paths=paths, diff_summary=diff, used_git=True)
+
+            if mode == "branch" and (req.base_ref or req.head_ref):
+                paths = list(req.changed_paths) if req.changed_paths else git.changed_files(repo, req.base_ref, req.head_ref)
+                warning = None
+                if not paths and not req.changed_paths:
+                    fallback = _default_path(repo)
+                    if fallback:
+                        paths = [fallback]
+                    else:
+                        warning = (
+                            f"No changed source files between {req.base_ref}...{req.head_ref}. "
+                            "Try unstaged scope or pass specific paths."
+                        )
+                        return VerifyScope(
+                            changed_paths=[],
+                            diff_summary="",
+                            used_git=True,
+                            warning=warning,
+                        )
+                diff = git.diff_text(repo, req.base_ref, req.head_ref, paths if req.changed_paths else None)
+                if not diff.strip():
+                    diff = diff_summary_for_paths(repo, paths)
+                return VerifyScope(changed_paths=paths, diff_summary=diff, used_git=True, warning=warning)
         except git.GitError:
             pass
+
+    if mode == "paths" or req.changed_paths:
+        fallback = _default_path(repo)
+        paths = req.changed_paths or ([fallback] if fallback else [])
+        if not paths:
+            return VerifyScope(
+                changed_paths=[],
+                diff_summary="",
+                used_git=False,
+                warning="No changed_paths provided and repo has no demo checkout default.",
+            )
+        return VerifyScope(
+            changed_paths=paths,
+            diff_summary=diff_summary_for_paths(repo, paths),
+            used_git=False,
+        )
 
     fallback = _default_path(repo)
     paths = req.changed_paths or ([fallback] if fallback else [])
