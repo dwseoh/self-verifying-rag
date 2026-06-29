@@ -102,9 +102,11 @@ async def complete_json(
     schema = schema or FINDINGS_SCHEMA
 
     if settings.use_mock:
+        mock_latency_ms = 50 if use_mock_findings else 45
+        await asyncio.sleep(mock_latency_ms / 1000)
         if not use_mock_findings:
-            return {"findings": []}, 45
-        return _load_mock(agent_name), 50
+            return {"findings": []}, mock_latency_ms
+        return _load_mock(agent_name), mock_latency_ms
 
     client = AsyncOpenAI(
         base_url=settings.cerebras_base_url,
