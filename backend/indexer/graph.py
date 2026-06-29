@@ -1,4 +1,4 @@
-"""Deterministic dependency graph for Python and C/C++ sources."""
+"""Deterministic dependency graph for Python, C/C++, and TypeScript/JavaScript."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 
 from backend.config import settings
-from backend.indexer.source_files import edges_for_file, iter_source_files
+from backend.indexer.source_files import edges_for_file, iter_graph_files
 
 
 def _read_file(repo: Path, rel: str) -> str:
@@ -28,7 +28,7 @@ def build_graph(repo_path: Path | None = None) -> dict:
     nodes: set[str] = set()
     edges: list[dict] = []
 
-    for src in iter_source_files(repo):
+    for src in iter_graph_files(repo):
         rel = str(src.relative_to(repo))
         nodes.add(rel)
         edges.extend(edges_for_file(src, repo))

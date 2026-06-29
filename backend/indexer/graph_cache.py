@@ -7,10 +7,10 @@ import json
 from pathlib import Path
 
 from backend.config import settings
-from backend.indexer.source_files import edges_for_file, iter_source_files
+from backend.indexer.source_files import edges_for_file, iter_graph_files
 
-# Bump when edge extraction rules change (e.g. added C/C++ includes).
-_CACHE_VERSION = 2
+# Bump when edge extraction rules change (e.g. added TS/JS imports).
+_CACHE_VERSION = 3
 
 
 def _cache_path(repo: Path) -> Path:
@@ -38,7 +38,7 @@ def build_graph_cached(repo_path: Path | None = None) -> dict:
     nodes: set[str] = set()
     seen_edges: set[tuple[str, str, str]] = set()
 
-    source_files = iter_source_files(repo)
+    source_files = iter_graph_files(repo)
     current_paths = set()
 
     for src in source_files:

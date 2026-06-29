@@ -107,11 +107,14 @@ export interface RepoIndexResponse {
     cached_files: number;
     python_files: number;
     c_cpp_files: number;
+    web_files?: number;
   };
   corpus: {
     path: string;
+    summary?: string;
     auto_discovered: boolean;
     using_global_fallback?: boolean;
+    using_shared_default?: boolean;
     formal_section_count?: number;
     repo_knowledge_files?: number;
     knowledge_sources?: Array<{ path: string; citation_id: string; size_bytes: number }>;
